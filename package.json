@@ -2,7 +2,7 @@
   "name": "db-viewer",
   "displayName": "DB Viewer",
   "description": "View and explore SQLite database files with a beautiful table interface. Supports .db, .sqlite, .sqlite3, .db3, .s3db, .sl3, and more.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "MJStudio",
   "author": {
           "name": "Mujeeb ur Rehman"

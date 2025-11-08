@@ -6,7 +6,7 @@
 
 **A beautiful, intuitive SQLite database viewer built right into Visual Studio Code**
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
