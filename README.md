@@ -1,114 +1,245 @@
-# db-viewer README
+<div align="center">
 
-This is the README for your extension "db-viewer". After writing up a brief description, we recommend including the following sections.
-
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+<img src="icon.png" alt="DB Viewer Icon" width="120" height="120">
 
 # DB Viewer
 
-A Visual Studio Code extension that allows you to view and explore SQLite database files (`.db`, `.sqlite`, `.sqlite3`) directly in the editor with a beautiful, intuitive table interface.
+**A beautiful, intuitive SQLite database viewer built right into Visual Studio Code**
+
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
+
+*Your all-in-one solution for exploring SQLite databases without leaving VS Code.*
+
+[Installation](#installation) • [Quick Start](#quick-start) • [Features](#features) • [Usage Guide](#usage-guide)
+
+</div>
+
+---
+
+<div align="center">
+
+![DB Viewer Interface](view.png)
+
+</div>
+
+## Why DB Viewer?
+
+Tired of switching between VS Code and external database tools? **DB Viewer** brings the power of SQLite database exploration directly into your favorite editor. With a beautiful, native interface that feels like part of VS Code itself, you can instantly inspect and understand your database structure and data.
+
+## Installation
+
+### Method 1: VS Code Extensions Marketplace
+
+1. Open VS Code and go to **Extensions** (`Ctrl+Shift+X`)
+2. Search for **"DB Viewer"**
+3. Click **Install**
+
+### Method 2: Command Line
+
+```bash
+code --install-extension MJStudio.db-viewer
+```
+
+### Method 3: VSIX File
+
+```bash
+# Download the .vsix file from releases
+code --install-extension path/to/db-viewer.vsix
+```
+
+## Quick Start
+
+Getting started takes seconds:
+
+1. Locate your database file in VS Code's Explorer
+2. Right-click any SQLite database file (`.db`, `.sqlite`, `.sqlite3`, `.db3`, etc.)
+3. Select **"Open with Database Viewer"**
+
+That's it! Your database will open in a beautiful, interactive viewer.
 
 ## Features
 
-- **Visual Database Explorer** - View database contents in an easy-to-read table format
-- **Multiple Table Support** - Sidebar navigation to quickly switch between tables
-- **Schema Information** - View table structures including column names and types
-- **Theme Integration** - Automatically matches your VS Code theme (light/dark)
-- **Read-Only Access** - Safely view database contents without accidental modifications
-- **Performance Optimized** - Efficiently handles large databases (displays first 1000 rows)
-- **Pure JavaScript** - No external database drivers required
+### Smart Table Navigation
 
-## Usage
+- **Sidebar Explorer**: Clean list of all tables with selection indicators
+- **Quick Search**: Filter tables by name (coming soon)
+- **Row Counts**: See table sizes at a glance
 
-### Opening Database Files
+### Native VS Code Experience
 
-There are three ways to open a database file:
+```typescript
+// Feels like part of VS Code
+theme: 'vs-code-native',
+responsive: true,
+darkMode: 'auto'
+```
 
-1. **Direct Click**: Simply click on any `.db`, `.sqlite`, or `.sqlite3` file in the Explorer
-2. **Command Palette**: Press `Ctrl+Shift+P` (Windows/Linux) or `Cmd+Shift+P` (Mac), type "Open Database" and press Enter
-3. **Right-click Menu**: Right-click on a database file → "Open With..." → "Database Viewer"
+### Rich Data Presentation
 
-### Exploring Your Database
+- **Sticky Headers**: Column names always visible while scrolling
+- **Type Indicators**: Clear data type badges (INTEGER, TEXT, etc.)
+- **Smart Truncation**: Handles long content gracefully
+- **Performance Optimized**: Smooth scrolling with large datasets
 
-- **Left Sidebar**: Lists all available tables in the database
-- **Click a Table**: View its contents in the main panel
-- **Table Information**: See row count, column count, and column names
-- **Scroll**: Navigate through your data with smooth scrolling
-- **Sticky Headers**: Column headers stay visible while scrolling
+### Safe & Secure
 
-## Supported File Types
+- **Read-Only Access**: Your data stays protected
+- **No Modifications**: Zero risk of accidental changes
+- **Local Processing**: All data stays on your machine
 
-- `.db` - SQLite database files
-- `.sqlite` - SQLite database files  
-- `.sqlite3` - SQLite database files
+## Usage Guide
 
-## Extension Settings
+### Opening Databases
 
-This extension works out of the box with no configuration required.
+| Method | Steps | Best For |
+|--------|-------|----------|
+| **Right-Click** | Right-click file → "Open with Database Viewer" | Quick access |
+| **Command Palette** | `Ctrl+Shift+P` → "Open Database" | Keyboard users |
+| **Default Handler** | Just click the database file | Everyday use |
 
-## Known Limitations
+### Understanding the Interface
 
-- Displays up to 1000 rows per table (for performance)
-- Read-only mode only (no editing capabilities)
-- Supports SQLite databases only (no MySQL, PostgreSQL, etc.)
+```text
+Database Viewer
+├── Sidebar (Tables List)
+│   ├── users (1,243 rows)
+│   ├── posts (5,892 rows) 
+│   └── comments (12,847 rows)
+│
+└── Main Viewer
+    ├── Column Headers (sticky)
+    ├── Data Rows (first 1000 shown)
+    └── Horizontal/Vertical Scroll
+```
 
-## Release Notes
+### Supported File Types
 
-### 1.0.0
+| Extension | Description | Compatibility |
+|-----------|-------------|---------------|
+| `.db` | SQLite Database | Full |
+| `.sqlite` | SQLite Database | Full |
+| `.sqlite3` | SQLite 3 Database | Full |
+| `.db3` | SQLite 3 Database | Full |
+| `.s3db` | SQLite 3 Database | Full |
+| `.sl3` | SQLite 3 Database | Full |
+| `.sdb` | SQLite Database | Full |
+| `.sqlitedb` | SQLite Database | Full |
 
-Initial release:
-- Custom editor for SQLite database files
-- Table listing sidebar
-- Interactive table viewer with data grid
-- Schema information and row counts
-- Full VS Code theme integration
-- Support for .db, .sqlite, and .sqlite3 files
+## Performance & Limits
+
+DB Viewer is optimized for performance while maintaining a smooth user experience:
+
+| Feature | Limit | Reason |
+|---------|-------|--------|
+| **Rows Displayed** | 1,000 per table | Performance & usability |
+| **File Size** | No hard limit | Limited by system memory |
+| **Concurrent DBs** | One at a time | Focused workflow |
+
+> **Tip**: For very large tables, focus on specific data subsets using the upcoming query features.
+
+## Troubleshooting
+
+### Common Issues & Solutions
+
+<details>
+<summary><b>Database won't open</b></summary>
+
+**Symptoms**: File doesn't open or shows error
+
+**Solutions**:
+- Verify file is valid SQLite: `file yourdatabase.db`
+- Check file permissions
+- Test with SQLite CLI: `sqlite3 yourdatabase.db ".tables"`
+
+```bash
+# Quick validation command
+sqlite3 yourdatabase.db "SELECT name FROM sqlite_master WHERE type='table';"
+```
+
+</details>
+
+<details>
+<summary><b>Tables appear empty</b></summary>
+
+**Symptoms**: Table opens but shows no data
+
+**Check**:
+- Table actually contains data
+- Database isn't corrupted
+- Try reloading VS Code window
+
+```bash
+# Check table contents
+sqlite3 yourdatabase.db "SELECT COUNT(*) FROM your_table;"
+```
+
+</details>
+
+<details>
+<summary><b>UI looks broken</b></summary>
+
+**Solutions**:
+- Reload VS Code window (`Ctrl+Shift+P` → "Developer: Reload Window")
+- Check for extension updates
+- Try switching VS Code theme
+
+</details>
+
+## Roadmap
+
+### Coming Soon
+
+- [ ] **SQL Query Interface**: Run custom queries
+- [ ] **Export Capabilities**: CSV, JSON export
+- [ ] **Schema Visualization**: ER diagrams
+- [ ] **Table Relationships**: Foreign key navigation
+
+### Future Possibilities
+
+- Multiple database connections
+- Data filtering and sorting
+- Binary data preview
+- Query history
+
+## Contributing
+
+We welcome contributions! Here's how you can help:
+
+- **Report Bugs**: Create an issue with detailed steps to reproduce
+- **Suggest Features**: Share your ideas for improvement
+- **Code Contributions**: PRs welcome! See our contributing guide
+
+### Development Setup
+
+```bash
+git clone https://github.com/thedatascientiist/db-viewer.git
+cd db-viewer
+npm install
+code .
+```
 
 ## License
 
-This extension is licensed under the [MIT License](LICENSE).
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- **VS Code Team** for the amazing extension API
+- **SQL.js contributors** for the SQLite implementation
+- **Our Users** for feedback and support
 
 ---
 
-**Enjoy exploring your databases!** ⭐
+<div align="center">
 
-*Made with ❤️ by Mujeeb ur Rehman*
+### Enjoying DB Viewer?
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+Give us a rating and leave a review on the VS Code Marketplace!
 
-## Requirements
+**Made with ❤️ Love by Mujeeb ur Rehman**
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+*Making database exploration beautiful and accessible*
 
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+</div>

@@ -1,13 +1,14 @@
 {
   "name": "db-viewer",
   "displayName": "DB Viewer",
-  "description": "View and explore SQLite database files (.db, .sqlite, .sqlite3) with a beautiful table interface",
+  "description": "View and explore SQLite database files with a beautiful table interface. Supports .db, .sqlite, .sqlite3, .db3, .s3db, .sl3, and more.",
   "version": "1.0.0",
-  "publisher": "MJtheDeveloper",
+  "publisher": "MJStudio",
   "author": {
-    "name": "Mujeeb ur Rehman"
+          "name": "Mujeeb ur Rehman"
   },
   "license": "MIT",
+  "icon": "icon.png",
   "keywords": [
     "sqlite",
     "database",
@@ -42,6 +43,21 @@
           },
           {
             "filenamePattern": "*.sqlite3"
+          },
+          {
+            "filenamePattern": "*.db3"
+          },
+          {
+            "filenamePattern": "*.s3db"
+          },
+          {
+            "filenamePattern": "*.sl3"
+          },
+          {
+            "filenamePattern": "*.sdb"
+          },
+          {
+            "filenamePattern": "*.sqlitedb"
           }
         ],
         "priority": "default"
