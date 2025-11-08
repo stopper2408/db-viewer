@@ -1,11 +1,11 @@
 # Change Log
 
-All notable changes to the "SQLite Database Viewer" extension will be documented in this file.
+All notable changes to the "DB Viewer" extension will be documented in this file.
 
 ## [1.0.0] - 2025-11-08
 
 ### Added
-- Initial release of SQLite Database Viewer
+- Initial release of DB Viewer
 - Custom editor for SQLite database files (.db, .sqlite, .sqlite3)
 - Visual table listing in sidebar
 - Interactive data grid viewer with scrolling

@@ -3,18 +3,11 @@
   "displayName": "DB Viewer",
   "description": "View and explore SQLite database files (.db, .sqlite, .sqlite3) with a beautiful table interface",
   "version": "1.0.0",
-  "publisher": "your-publisher-name",
+  "publisher": "MJtheDeveloper",
   "author": {
     "name": "Mujeeb ur Rehman"
   },
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/your-username/db-viewer"
-  },
-  "bugs": {
-    "url": "https://github.com/your-username/db-viewer/issues"
-  },
   "keywords": [
     "sqlite",
     "database",
