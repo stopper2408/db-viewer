@@ -100,5 +100,9 @@
   },
   "dependencies": {
     "sql.js": "^1.13.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thedatascientiist/db-viewer.git"
   }
 }
