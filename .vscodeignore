@@ -1,0 +1,31 @@
+# Build and source files
+.vscode/**
+.vscode-test/**
+out/**
+node_modules/**
+src/**
+.gitignore
+.yarnrc
+esbuild.js
+vsc-extension-quickstart.md
+**/tsconfig.json
+**/eslint.config.mjs
+**/*.map
+**/*.ts
+**/.vscode-test.*
+
+# Test and sample files
+**/*.test.ts
+**/*.test.js
+*.db
+*.sqlite
+*.sqlite3
+check-db.js
+test-*.js
+TESTING.md
+
+# Development only
+.editorconfig
+.github/**
+docs/**
+*.log

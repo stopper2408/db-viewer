@@ -1,0 +1,95 @@
+{
+  "name": "db-viewer",
+  "displayName": "DB Viewer",
+  "description": "View and explore SQLite database files (.db, .sqlite, .sqlite3) with a beautiful table interface",
+  "version": "1.0.0",
+  "publisher": "your-publisher-name",
+  "author": {
+    "name": "Mujeeb ur Rehman"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/db-viewer"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/db-viewer/issues"
+  },
+  "keywords": [
+    "sqlite",
+    "database",
+    "db",
+    "viewer",
+    "sql",
+    "sqlite3",
+    "database viewer",
+    "sql viewer"
+  ],
+  "engines": {
+    "vscode": "^1.105.0"
+  },
+  "categories": [
+    "Data Science",
+    "Visualization",
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "db-viewer.dbViewer",
+        "displayName": "Database Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.db"
+          },
+          {
+            "filenamePattern": "*.sqlite"
+          },
+          {
+            "filenamePattern": "*.sqlite3"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "db-viewer.openDatabase",
+        "title": "Open Database"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/sql.js": "^1.4.9",
+    "@types/vscode": "^1.105.0",
+    "@typescript-eslint/eslint-plugin": "^8.45.0",
+    "@typescript-eslint/parser": "^8.45.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.25.10",
+    "eslint": "^9.36.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "sql.js": "^1.13.0"
+  }
+}
