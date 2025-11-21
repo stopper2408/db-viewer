@@ -54,7 +54,10 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             async message => {
                 switch (message.type) {
                     case 'getTableData':
-                        await this.loadTableData(document.uri, message.tableName, webviewPanel.webview);
+                        await this.loadTableData(document.uri, message.tableName, webviewPanel.webview, message.page, message.pageSize);
+                        break;
+                    case 'executeQuery':
+                        await this.executeCustomQuery(document.uri, message.query, webviewPanel.webview);
                         break;
                 }
             }
@@ -76,9 +79,21 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             
             const db = new SQL.Database(buffer);
             
-            // Get all tables
+            // Get all tables with row counts
             const result = db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
             const tableNames: string[] = result.length > 0 ? result[0].values.map(row => row[0] as string) : [];
+
+            // Get row counts for each table
+            const tablesWithCounts = tableNames.map(tableName => {
+                try {
+                    const countResult = db.exec(`SELECT COUNT(*) as count FROM "${tableName}"`);
+                    const rowCount = countResult.length > 0 ? countResult[0].values[0][0] as number : 0;
+                    return { name: tableName, rowCount };
+                } catch (err) {
+                    console.error(`[DB Viewer] Error getting count for ${tableName}:`, err);
+                    return { name: tableName, rowCount: 0 };
+                }
+            });
 
             console.log(`[DB Viewer] Found ${tableNames.length} tables: ${tableNames.join(', ')}`);
             
@@ -86,7 +101,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
 
             webview.postMessage({
                 type: 'databaseLoaded',
-                tables: tableNames
+                tables: tablesWithCounts
             });
 
         } catch (error) {
@@ -98,9 +113,9 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         }
     }
 
-    private async loadTableData(uri: vscode.Uri, tableName: string, webview: vscode.Webview) {
+    private async loadTableData(uri: vscode.Uri, tableName: string, webview: vscode.Webview, page: number = 1, pageSize: number = 100) {
         try {
-            console.log(`[DB Viewer] Loading table: ${tableName}`);
+            console.log(`[DB Viewer] Loading table: ${tableName} (page ${page}, size ${pageSize})`);
             
             const SQL = await initSqlJs({
                 locateFile: file => {
@@ -115,14 +130,18 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             const schemaResult = db.exec(`PRAGMA table_info("${tableName}")`);
             const schema = schemaResult.length > 0 ? schemaResult[0].values : [];
 
-            // Get table data (limit to 1000 rows for performance)
-            const dataResult = db.exec(`SELECT * FROM "${tableName}" LIMIT 1000`);
-            
             // Get row count
             const countResult = db.exec(`SELECT COUNT(*) as count FROM "${tableName}"`);
             const rowCount = countResult.length > 0 ? countResult[0].values[0][0] as number : 0;
 
-            console.log(`[DB Viewer] Table ${tableName}: ${rowCount} total rows, ${schema.length} columns`);
+            // Calculate pagination
+            const offset = (page - 1) * pageSize;
+            const totalPages = Math.ceil(rowCount / pageSize);
+
+            // Get table data with pagination
+            const dataResult = db.exec(`SELECT * FROM "${tableName}" LIMIT ${pageSize} OFFSET ${offset}`);
+
+            console.log(`[DB Viewer] Table ${tableName}: ${rowCount} total rows, ${schema.length} columns, page ${page}/${totalPages}`);
 
             // Convert sql.js result format to JSON objects
             const data: any[] = [];
@@ -146,7 +165,10 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 tableName: tableName,
                 schema: schema,
                 data: data,
-                rowCount: rowCount
+                rowCount: rowCount,
+                page: page,
+                pageSize: pageSize,
+                totalPages: totalPages
             });
 
         } catch (error) {
@@ -158,6 +180,56 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         }
     }
 
+    private async executeCustomQuery(uri: vscode.Uri, query: string, webview: vscode.Webview) {
+        try {
+            console.log(`[DB Viewer] Executing custom query: ${query}`);
+            
+            const SQL = await initSqlJs({
+                locateFile: file => {
+                    return path.join(__dirname, file);
+                }
+            });
+
+            const buffer = fs.readFileSync(uri.fsPath);
+            const db = new SQL.Database(buffer);
+
+            // Execute the query
+            const result = db.exec(query);
+
+            // Convert results to JSON format
+            const data: any[] = [];
+            if (result.length > 0) {
+                const columns = result[0].columns;
+                const values = result[0].values;
+                
+                values.forEach(row => {
+                    const obj: any = {};
+                    columns.forEach((col, index) => {
+                        obj[col] = row[index];
+                    });
+                    data.push(obj);
+                });
+            }
+
+            db.close();
+
+            webview.postMessage({
+                type: 'queryResult',
+                data: data,
+                rowCount: data.length,
+                success: true
+            });
+
+        } catch (error) {
+            console.error(`[DB Viewer] Error executing query:`, error);
+            webview.postMessage({
+                type: 'queryResult',
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    }
+
     private getHtmlForWebview(webview: vscode.Webview): string {
     return `<!DOCTYPE html>
 <html lang="en">
@@ -165,30 +237,75 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Database Viewer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* Base Variables and Reset for VS Code Integration */
         :root {
-            /* Map VS Code Theme colors to design variables */
-            --primary: var(--vscode-editorActiveTab-activeBackground); 
-            --primary-dark: var(--vscode-list-activeSelectionBackground);
-            --secondary-button-color: var(--vscode-button-background);
-            --secondary-button-hover: var(--vscode-button-hoverBackground);
-            --accent: var(--vscode-errorForeground);
+            /* Professional Blue Color Palette */
+            --primary-color: #0078d4;
+            --primary-dark: #005a9e;
+            --primary-light: #50a0e0;
+            --secondary-color: #0078d4;
+            --success-color: #107c10;
+            --warning-color: #ff8c00;
+            --danger-color: #d13438;
+            --info-color: #0078d4;
+            
+            /* VS Code Integration */
             --light: var(--vscode-editor-background);
             --dark: var(--vscode-foreground);
             --gray: var(--vscode-descriptionForeground);
             --border-color: var(--vscode-panel-border);
             --sidebar-bg: var(--vscode-sideBar-background);
             
-            /* Dedicated variable for the table header background */
-            --table-header-bg: var(--vscode-terminal-ansiBrightBlue, #4C6A9E); 
-            --sidebar-padding: 15px; /* Define a consistent padding value */
-            --item-spacing: 4px; /* Define spacing between non-active list items */
-
-            --border-radius: 8px; 
+            /* Table Colors */
+            --table-header-bg: #0078d4;
+            --table-row-hover: rgba(0, 120, 212, 0.08);
+            --table-row-even: rgba(0, 120, 212, 0.02);
+            
+            /* Spacing & Effects */
+            --sidebar-padding: 15px;
+            --item-spacing: 4px;
+            --border-radius: 8px;
+            --border-radius-sm: 6px;
             --transition: all 0.2s ease;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            --shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.15);
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(-20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+        
+        @keyframes bounceIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(20px); opacity: 0; }
         }
         
         * {
@@ -201,7 +318,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             font-family: var(--vscode-font-family);
             margin: 0;
             padding: 15px; 
-            background-color: var(--vscode-editor-background); 
+            background: var(--vscode-editor-background);
             color: var(--dark);
             min-height: 100vh;
             overflow: hidden; 
@@ -220,8 +337,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         
         /* --- Sidebar (Table Selector) --- */
         .sidebar {
-            width: 220px; 
-            /* FIXED: Removed horizontal padding to allow links to span full width */
+            width: 260px; 
             padding: var(--sidebar-padding) 0; 
             background: var(--sidebar-bg);
             border: 1px solid var(--border-color);
@@ -230,21 +346,48 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             flex-shrink: 0;
             overflow-y: auto;
             max-height: calc(100vh - 30px);
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .search-box {
+            padding: 0 var(--sidebar-padding);
+            margin-bottom: 12px;
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            background: var(--light);
+            color: var(--dark);
+            font-size: 13px;
+            transition: var(--transition);
+        }
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.1);
         }
         
         .sidebar-header {
             display: flex;
             align-items: center;
-            gap: 10px;
-            /* Added horizontal padding here */
-            padding: 0 var(--sidebar-padding) 8px var(--sidebar-padding); 
+            gap: 8px;
+            padding: 0 var(--sidebar-padding) 10px var(--sidebar-padding); 
             margin-bottom: 10px; 
             border-bottom: 1px solid var(--border-color);
         }
         
+        .sidebar-header i {
+            font-size: 16px;
+            color: var(--primary-color);
+        }
+        
         .sidebar h3 {
             margin: 0;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
             color: var(--dark);
         }
@@ -266,7 +409,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         .table-item-link {
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
             text-decoration: none;
             color: var(--dark);
             font-size: 13px;
@@ -274,39 +417,67 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             transition: var(--transition);
             cursor: pointer;
             border-radius: 6px; 
-            /* Added margin here to provide vertical separation between *non-active* items */
-            margin: var(--item-spacing) var(--sidebar-padding) 0 var(--sidebar-padding); 
+            margin: var(--item-spacing) var(--sidebar-padding) 0 var(--sidebar-padding);
         }
         
-        .table-item-link i {
+        .table-item-content {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .table-item-link i.table-icon {
             width: 18px;
             text-align: center;
             color: var(--gray);
             font-size: 14px;
         }
         
+        .table-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .row-count-badge {
+            background: var(--vscode-badge-background);
+            color: var(--vscode-badge-foreground);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 24px;
+            text-align: center;
+        }
+        
         .table-item-link:hover {
-            background-color: var(--vscode-list-hoverBackground);
+            background: var(--vscode-list-hoverBackground);
             color: var(--dark);
+            transform: translateX(3px);
         }
         
         .table-item-link.active {
-            background-color: var(--primary); 
-            color: white;
-            font-weight: 500;
-            /* FINAL FIX: Remove all margins to sit flush against surrounding elements */
+            background: var(--vscode-list-activeSelectionBackground);
+            color: var(--vscode-list-activeSelectionForeground);
+            font-weight: 600;
             margin: 0; 
-            /* Set padding to match header indentation */
             padding: 10px var(--sidebar-padding); 
-            border-radius: 0; 
+            border-radius: 0;
+            transform: none;
         }
         
-        .table-item-link.active i {
-            color: white;
-            margin-left: 0; 
+        .table-item-link.active i.table-icon {
+            color: var(--vscode-list-activeSelectionForeground);
         }
         
-        /* Active selection indicator */
+        .table-item-link.active .row-count-badge {
+            background: rgba(255, 255, 255, 0.2);
+            color: var(--vscode-list-activeSelectionForeground);
+        }
+        
         .table-item-link .selection-arrow {
             display: none;
             margin-right: 5px;
@@ -331,6 +502,79 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            animation: fadeIn 0.4s ease-out;
+        }
+        
+        /* Query Panel */
+        .query-panel {
+            background: var(--vscode-input-background);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            margin-bottom: 20px;
+            transition: var(--transition);
+        }
+        
+        .query-panel.collapsed {
+            padding: 10px 15px;
+        }
+        
+        .query-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .query-header h3 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--dark);
+        }
+        
+        .query-header h3 i {
+            color: var(--primary-color);
+        }
+        
+        .query-content {
+            margin-top: 12px;
+            display: none;
+        }
+        
+        .query-panel:not(.collapsed) .query-content {
+            display: block;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        .query-input {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--light);
+            color: var(--dark);
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+            resize: vertical;
+            transition: var(--transition);
+        }
+        
+        .query-input:focus {
+            outline: none;
+            border-color: var(--secondary-button-color);
+            box-shadow: 0 0 0 2px rgba(127, 92, 255, 0.1);
+        }
+        
+        .query-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
         }
         
         .header {
@@ -351,11 +595,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         }
 
         h1.table-name-heading {
-            background: linear-gradient(135deg, var(--vscode-terminal-ansiBrightBlue), var(--vscode-terminal-ansiCyan));
-            color: white; 
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: white;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5); 
+            color: var(--primary-color);
         }
         
         .header-actions {
@@ -364,11 +604,11 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         }
         
         .action-button {
-            padding: 10px 18px;
-            background-color: var(--secondary-button-color); 
+            padding: 8px 16px;
+            background: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
             border: none;
-            border-radius: 6px;
+            border-radius: var(--border-radius-sm);
             cursor: pointer;
             font-size: 13px;
             font-weight: 500;
@@ -377,23 +617,26 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             align-items: center;
             gap: 6px;
         }
-
-        .action-button.secondary {
-            background-color: transparent;
-            color: var(--secondary-button-color);
-            border: 1px solid var(--secondary-button-color);
+        
+        .action-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
         
-        .action-button:hover {
-            background-color: var(--secondary-button-hover);
+        .action-button:not(:disabled):hover {
+            background: var(--vscode-button-hoverBackground);
             transform: translateY(-1px);
         }
 
-        .action-button.secondary:hover {
-            background-color: rgba(127, 92, 255, 0.1); 
-            border-color: var(--secondary-button-hover);
-            color: var(--secondary-button-hover);
-            transform: translateY(-1px);
+        .action-button.secondary {
+            background: transparent;
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+        }
+
+        .action-button.secondary:not(:disabled):hover {
+            background: rgba(0, 120, 212, 0.1);
+            color: var(--primary-dark);
         }
         
         /* --- Table View --- */
@@ -403,19 +646,110 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             border-radius: 6px;
         }
 
+        #tableContent {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            flex: 1;
+        }
+
         .table-info-bar {
             display: flex;
             justify-content: space-between;
-            align-items: baseline;
+            align-items: center;
             margin-bottom: 15px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid var(--border-color);
+            padding: 12px;
+            background: var(--vscode-input-background);
+            border-radius: 6px;
+            flex-wrap: wrap;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        
+        .table-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .filter-input {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            background: var(--light);
+            color: var(--dark);
+            font-size: 13px;
+            min-width: 200px;
+            transition: var(--transition);
+        }
+        
+        .filter-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.1);
         }
 
         .table-stats {
             color: var(--gray);
             font-size: 12px;
-            font-style: italic;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        /* Pagination */
+        .pagination {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 15px;
+            justify-content: center;
+            padding: 15px;
+            background: var(--vscode-input-background);
+            border-radius: var(--border-radius-sm);
+        }
+        
+        .pagination button {
+            padding: 6px 12px;
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            font-size: 12px;
+            transition: var(--transition);
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        .pagination button:not(:disabled):hover {
+            background: var(--vscode-button-hoverBackground);
+        }
+        
+        .pagination .page-info {
+            color: var(--dark);
+            font-size: 13px;
+            font-weight: 500;
+            padding: 0 10px;
+        }
+        
+        .pagination select {
+            padding: 6px 10px;
+            background: var(--light);
+            color: var(--dark);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            font-size: 12px;
+            cursor: pointer;
         }
 
         table {
@@ -424,20 +758,21 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             overflow: hidden;
             border-radius: 8px; 
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            min-width: 100%;
+            min-width: 800px;
         }
         
         th, td {
-            padding: 14px 16px; 
+            padding: 12px 16px; 
             text-align: left;
             white-space: nowrap;
-            max-width: 300px;
+            min-width: 100px;
+            max-width: 400px;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         
         th {
-            background-color: var(--table-header-bg); 
+            background: var(--table-header-bg);
             color: white; 
             font-weight: 600;
             text-transform: uppercase;
@@ -446,11 +781,28 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             position: sticky;
             top: 0;
             z-index: 5;
+            cursor: pointer;
+            user-select: none;
+            transition: var(--transition);
+        }
+        
+        th:hover {
+            background: var(--primary-dark);
+        }
+        
+        th .sort-indicator {
+            margin-left: 6px;
+            font-size: 10px;
+            opacity: 0.6;
+        }
+        
+        th.sorted .sort-indicator {
+            opacity: 1;
         }
         
         /* Zebra Striping */
         tr:nth-child(even) {
-            background-color: var(--vscode-list-hoverBackground);
+            background-color: var(--table-row-even);
         }
 
         tr:nth-child(odd) {
@@ -458,13 +810,37 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         }
         
         tr:hover {
-            background-color: var(--vscode-list-activeSelectionBackground);
-            color: var(--vscode-list-activeSelectionForeground);
+            background-color: var(--table-row-hover) !important;
         }
 
         td {
             border-bottom: 1px solid var(--border-color);
             font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+        }
+        
+        td:hover {
+            background-color: var(--vscode-list-hoverBackground) !important;
+        }
+        
+        td:hover::after {
+            content: 'Copy';
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 10px;
+            font-weight: 600;
+            color: white;
+            background: var(--primary-color);
+            padding: 3px 8px;
+            border-radius: 3px;
+            box-shadow: 0 2px 6px rgba(0, 120, 212, 0.4);
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 10;
         }
         
         tr:last-child td {
@@ -476,22 +852,100 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             color: var(--vscode-editorUnnecessary-foreground); 
             font-style: italic; 
         }
+
+        /* Data Type Color Coding */
+        td[data-type="number"] {
+            color: #0e7490;
+            font-weight: 500;
+        }
+        
+        td[data-type="string"] {
+            color: var(--vscode-editor-foreground);
+        }
+        
+        td[data-type="object"]:not([data-value="NULL"]) {
+            color: #7c3aed;
+            font-style: italic;
+        }
+        
+        td[data-type="boolean"] {
+            color: #dc2626;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        /* Cell Preview Modal */
+        .cell-preview-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            animation: fadeIn 0.2s ease-out;
+        }
+        
+        .cell-preview-content {
+            background: var(--light);
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: var(--shadow-hover);
+            max-width: 80%;
+            max-height: 80%;
+            overflow: auto;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        .cell-preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .cell-preview-header h3 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .cell-preview-body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: var(--dark);
+            font-size: 13px;
+            line-height: 1.6;
+        }
         
         .placeholder {
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100%;
             color: var(--gray);
             font-size: 14px;
             text-align: center;
+            padding: 40px;
+        }
+        
+        .placeholder i {
+            color: var(--gray);
+            opacity: 0.5;
         }
 
         .error {
-            padding: 10px;
-            background-color: var(--vscode-errorBackground);
-            border: 1px solid var(--vscode-errorForeground);
-            border-radius: 4px;
+            padding: 10px 15px;
+            background: var(--vscode-inputValidation-errorBackground);
+            border: 1px solid var(--vscode-inputValidation-errorBorder);
+            border-radius: var(--border-radius-sm);
             color: var(--vscode-errorForeground);
             margin-bottom: 15px;
         }
@@ -503,22 +957,26 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
             display: none;
             justify-content: center;
             align-items: center;
             z-index: 100;
+            animation: fadeIn 0.3s ease-out;
         }
 
         .modal-content {
             background-color: var(--light);
             padding: 25px;
-            border-radius: 8px;
-            box-shadow: var(--shadow);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-hover);
+            border: 1px solid var(--border-color);
             width: 90%;
             max-width: 800px;
             max-height: 90vh;
             overflow-y: auto;
+            animation: bounceIn 0.3s ease-out;
         }
 
         .modal-header {
@@ -533,6 +991,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         .modal-header h2 {
             font-size: 18px;
             font-weight: 600;
+            color: var(--dark);
         }
 
         .close-button {
@@ -543,6 +1002,10 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             cursor: pointer;
             padding: 0 5px;
             line-height: 1;
+        }
+        
+        .close-button:hover {
+            color: var(--vscode-errorForeground);
         }
 
         .schema-table {
@@ -571,6 +1034,9 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 <i class="fas fa-database"></i>
                 <h3>Tables</h3>
             </div>
+            <div class="search-box">
+                <input type="text" id="tableSearch" placeholder="Search tables..." oninput="filterTables()">
+            </div>
             <ul id="tableList">
                 <li><a class="table-item-link"><i class="fas fa-spinner fa-spin"></i> Loading tables...</a></li>
             </ul>
@@ -580,12 +1046,40 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             <div class="header">
                 <h1 id="mainHeading">Database Viewer</h1>
                 <div class="header-actions">
+                    <button id="refreshButton" class="action-button secondary" style="display:none;" onclick="refreshTable()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
                     <button id="viewSchemaButton" class="action-button secondary" style="display:none;" onclick="openSchemaModal()">
-                        <i class="fas fa-info-circle"></i> View Schema
+                        <i class="fas fa-info-circle"></i> Schema
                     </button>
-                    <button class="action-button" disabled>
-                        <i class="fas fa-redo"></i> Refresh
+                    <button id="exportCsvButton" class="action-button secondary" style="display:none;" onclick="exportToCSV()">
+                        <i class="fas fa-file-csv"></i> Export CSV
                     </button>
+                    <button id="exportJsonButton" class="action-button secondary" style="display:none;" onclick="exportToJSON()">
+                        <i class="fas fa-file-code"></i> Export JSON
+                    </button>
+                    <button id="copyAllButton" class="action-button secondary" style="display:none;" onclick="copyAllData()">
+                        <i class="fas fa-copy"></i> Copy All
+                    </button>
+                </div>
+            </div>
+            
+            <!-- SQL Query Panel -->
+            <div class="query-panel collapsed" id="queryPanel">
+                <div class="query-header" onclick="toggleQueryPanel()">
+                    <h3><i class="fas fa-terminal"></i> SQL Query Editor <span id="queryToggleIcon" style="font-size: 12px;">(click to expand)</span></h3>
+                    <i class="fas fa-chevron-down" id="queryChevron"></i>
+                </div>
+                <div class="query-content">
+                    <textarea class="query-input" id="queryInput" placeholder="Enter your SQL query here... (e.g., SELECT * FROM tablename WHERE condition)"></textarea>
+                    <div class="query-actions">
+                        <button class="action-button" onclick="executeQuery()">
+                            <i class="fas fa-play"></i> Execute Query
+                        </button>
+                        <button class="action-button secondary" onclick="clearQuery()">
+                            <i class="fas fa-eraser"></i> Clear
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -593,8 +1087,22 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
 
             <div class="data-panel" id="tableContent">
                 <div class="placeholder">
-                    <p>Select a table from the sidebar to view its contents.</p>
+                    <p><i class="fas fa-hand-pointer" style="font-size: 48px; opacity: 0.3; margin-bottom: 15px;"></i><br>Select a table from the sidebar to view its contents.</p>
                 </div>
+            </div>
+            
+            <div class="pagination" id="pagination" style="display:none;">
+                <button onclick="goToFirstPage()"><i class="fas fa-angle-double-left"></i></button>
+                <button onclick="previousPage()"><i class="fas fa-angle-left"></i> Previous</button>
+                <span class="page-info" id="pageInfo">Page 1 of 1</span>
+                <button onclick="nextPage()">Next <i class="fas fa-angle-right"></i></button>
+                <button onclick="goToLastPage()"><i class="fas fa-angle-double-right"></i></button>
+                <select id="pageSizeSelect" onchange="changePageSize()">
+                    <option value="50">50 rows</option>
+                    <option value="100" selected>100 rows</option>
+                    <option value="200">200 rows</option>
+                    <option value="500">500 rows</option>
+                </select>
             </div>
         </div>
     </div>
@@ -605,15 +1113,33 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 <h2 id="modalTableName">Table Schema</h2>
                 <button class="close-button" onclick="closeSchemaModal()">&times;</button>
             </div>
-            <div id="schemaTableContainer">
-                </div>
+            <div id="schemaTableContainer"></div>
+        </div>
+    </div>
+
+    <div id="cellPreviewModal" class="cell-preview-modal" onclick="closeCellPreview(event)">
+        <div class="cell-preview-content" onclick="event.stopPropagation()">
+            <div class="cell-preview-header">
+                <h3 id="cellPreviewTitle">Cell Content</h3>
+                <button class="close-button" onclick="closeCellPreview()">&times;</button>
+            </div>
+            <div class="cell-preview-body" id="cellPreviewBody"></div>
         </div>
     </div>
 
     <script>
         const vscode = acquireVsCodeApi();
         let currentTable = null;
-        let currentSchema = []; 
+        let currentSchema = [];
+        let currentData = [];
+        let filteredData = [];
+        let allTables = [];
+        let currentPage = 1;
+        let pageSize = 100;
+        let totalPages = 1;
+        let totalRows = 0;
+        let sortColumn = null;
+        let sortDirection = 'asc';
         const mainHeading = document.getElementById('mainHeading');
 
         // --- Message Handling from Extension ---
@@ -622,15 +1148,45 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             
             switch (message.type) {
                 case 'databaseLoaded':
+                    allTables = message.tables;
                     displayTables(message.tables);
                     break;
                 case 'tableData':
-                    currentSchema = message.schema; 
+                    currentSchema = message.schema;
+                    currentData = message.data;
+                    filteredData = [...currentData];
+                    currentPage = message.page || 1;
+                    pageSize = message.pageSize || 100;
+                    totalPages = message.totalPages || 1;
+                    totalRows = message.rowCount || 0;
                     displayTableData(message.tableName, message.schema, message.data, message.rowCount);
+                    break;
+                case 'queryResult':
+                    displayQueryResult(message);
                     break;
                 case 'error':
                     showError(message.message);
                     break;
+            }
+        });
+
+        // --- Keyboard Shortcuts ---
+        document.addEventListener('keydown', event => {
+            // Ctrl+R or F5: Refresh current table
+            if ((event.ctrlKey && event.key === 'r') || event.key === 'F5') {
+                event.preventDefault();
+                refreshTable();
+            }
+            // Ctrl+F: Focus search input
+            else if (event.ctrlKey && event.key === 'f') {
+                event.preventDefault();
+                const searchInput = document.querySelector('.table-search-input');
+                if (searchInput) searchInput.focus();
+            }
+            // Ctrl+Shift+C: Copy all data
+            else if (event.ctrlKey && event.shiftKey && event.key === 'C') {
+                event.preventDefault();
+                copyAllData();
             }
         });
 
@@ -640,16 +1196,26 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             tableList.innerHTML = '';
             
             if (tables.length === 0) {
-                tableList.innerHTML = '<li><a class="table-item-link"><i class="fas fa-exclamation-circle"></i> No tables found</a></li>';
+                tableList.innerHTML = '<li><a class="table-item-link"><i class="fas fa-exclamation-circle table-icon"></i><span class="table-name">No tables found</span></a></li>';
                 return;
             }
 
-            tables.forEach(tableName => {
+            tables.forEach(table => {
+                const tableName = typeof table === 'string' ? table : table.name;
+                const rowCount = typeof table === 'object' ? table.rowCount : 0;
+                
                 const li = document.createElement('li');
                 const link = document.createElement('a');
                 link.className = 'table-item-link';
-                // Add the arrow span here
-                link.innerHTML = \`<span class="selection-arrow">></span><i class="fas fa-table"></i> \${escapeHtml(tableName)}\`; 
+                link.setAttribute('data-table-name', tableName);
+                link.innerHTML = \`
+                    <span class="selection-arrow">></span>
+                    <div class="table-item-content">
+                        <i class="fas fa-table table-icon"></i>
+                        <span class="table-name">\${escapeHtml(tableName)}</span>
+                    </div>
+                    <span class="row-count-badge">\${formatNumber(rowCount)}</span>
+                \`;
                 link.onclick = (e) => {
                     e.preventDefault();
                     selectTable(tableName, link);
@@ -657,6 +1223,15 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 li.appendChild(link);
                 tableList.appendChild(li);
             });
+        }
+        
+        function filterTables() {
+            const searchTerm = document.getElementById('tableSearch').value.toLowerCase();
+            const filteredTables = allTables.filter(table => {
+                const tableName = typeof table === 'string' ? table : table.name;
+                return tableName.toLowerCase().includes(searchTerm);
+            });
+            displayTables(filteredTables);
         }
 
         function selectTable(tableName, element) {
@@ -667,75 +1242,374 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             element.classList.add('active');
             
             currentTable = tableName;
-            document.getElementById('viewSchemaButton').style.display = 'none'; // Hide button while loading
+            currentPage = 1;
+            sortColumn = null;
+            sortDirection = 'asc';
             
-            // Set the main heading to the table name and apply the custom style
+            document.getElementById('viewSchemaButton').style.display = 'none';
+            document.getElementById('exportCsvButton').style.display = 'none';
+            document.getElementById('exportJsonButton').style.display = 'none';
+            
             mainHeading.textContent = escapeHtml(tableName);
             mainHeading.classList.add('table-name-heading'); 
 
             vscode.postMessage({
                 type: 'getTableData',
-                tableName: tableName
+                tableName: tableName,
+                page: currentPage,
+                pageSize: pageSize
             });
 
-            // Show loading state
             const tableContent = document.getElementById('tableContent');
             tableContent.innerHTML = \`
                 <div class="placeholder">
-                    <i class="fas fa-sync fa-spin" style="margin-right: 10px;"></i>
-                    <span>Loading data for **\${escapeHtml(tableName)}**...</span>
+                    <i class="fas fa-sync fa-spin" style="margin-right: 10px; font-size: 24px;"></i>
+                    <span>Loading data for <strong>\${escapeHtml(tableName)}</strong>...</span>
                 </div>\`;
             document.getElementById('errorContainer').innerHTML = '';
+            document.getElementById('pagination').style.display = 'none';
         }
 
         // --- Table View Functionality ---
         function displayTableData(tableName, schema, data, rowCount) {
             const tableContent = document.getElementById('tableContent');
-            document.getElementById('viewSchemaButton').style.display = 'flex'; // Show button
+            document.getElementById('refreshButton').style.display = 'flex';
+            document.getElementById('viewSchemaButton').style.display = 'flex';
+            document.getElementById('exportCsvButton').style.display = 'flex';
+            document.getElementById('exportJsonButton').style.display = 'flex';
+            document.getElementById('copyAllButton').style.display = 'flex';
             
             if (data.length === 0) {
                 let emptyMessage = rowCount > 0 
                     ? 'Table data could not be loaded or is filtered.'
                     : 'The table is empty. No rows found.';
                 tableContent.innerHTML = \`<div class="placeholder"><p>\${emptyMessage}</p></div>\`;
+                document.getElementById('pagination').style.display = 'none';
                 return;
             }
 
-            // Table Info Bar (Stats only)
-            const infoBarHtml = \`
+            const columns = Object.keys(data[0]);
+            const tableGridHtml = \`
                 <div class="table-info-bar">
-                    <span></span> 
+                    <div class="table-controls">
+                        <input type="text" class="filter-input" placeholder="Filter rows..." oninput="filterTableData(this.value)">
+                    </div>
                     <span class="table-stats">
-                        \${rowCount} rows (\${data.length} shown) | \${schema.length} columns
-                        \${rowCount > 1000 ? ' (Showing first 1000 rows)' : ''}
+                        <i class="fas fa-database"></i>
+                        \${formatNumber(rowCount)} total rows | \${schema.length} columns
                     </span>
+                </div>
+                <div class="table-wrapper">
+                    <table id="dataTable">
+                        <thead>
+                            <tr>
+                                \${columns.map(col => \`<th onclick="sortTable('\${col}')">\${escapeHtml(col)}<span class="sort-indicator"></span></th>\`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            \${renderTableRows(data, columns)}
+                        </tbody>
+                    </table>
                 </div>
             \`;
 
-            // Table Data Grid
-            const columns = Object.keys(data[0]);
-            const tableGridHtml = \`
-                <table>
-                    <thead>
-                        <tr>
-                            \${columns.map(col => \`<th>\${escapeHtml(col)}</th>\`).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        \${data.map(row => \`
-                            <tr>
-                                \${columns.map(col => \`<td data-value="\${formatValue(row[col])}">\${escapeHtml(formatValue(row[col]))}</td>\`).join('')}
-                            </tr>
-                        \`).join('')}
-                    </tbody>
-                </table>
-            \`;
-
-            // Combine and render
-            tableContent.innerHTML = infoBarHtml + tableGridHtml;
+            tableContent.innerHTML = tableGridHtml;
+            updatePagination();
+        }
+        
+        function renderTableRows(data, columns) {
+            return data.map(row => \`
+                <tr>
+                    \${columns.map(col => {
+                        const rawValue = row[col];
+                        const value = formatValue(rawValue);
+                        let dataType = 'string';
+                        
+                        if (rawValue === null || rawValue === undefined) {
+                            dataType = 'null';
+                        } else if (typeof rawValue === 'number') {
+                            dataType = 'number';
+                        } else if (typeof rawValue === 'boolean') {
+                            dataType = 'boolean';
+                        } else if (typeof rawValue === 'object') {
+                            dataType = 'object';
+                        }
+                        
+                        return \`<td data-value="\${value}" data-type="\${dataType}" onclick="copyCellValue(this)" title="Click to copy: \${escapeHtml(value)}">\${escapeHtml(value)}</td>\`;
+                    }).join('')}
+                </tr>
+            \`).join('');
+        }
+        
+        function filterTableData(searchTerm) {
+            searchTerm = searchTerm.toLowerCase();
+            if (!searchTerm) {
+                filteredData = [...currentData];
+            } else {
+                filteredData = currentData.filter(row => {
+                    return Object.values(row).some(val => {
+                        const strVal = String(val).toLowerCase();
+                        return strVal.includes(searchTerm);
+                    });
+                });
+            }
+            
+            const columns = Object.keys(currentData[0]);
+            const tbody = document.getElementById('tableBody');
+            if (tbody) {
+                tbody.innerHTML = renderTableRows(filteredData, columns);
+            }
+        }
+        
+        function sortTable(column) {
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+            
+            filteredData.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+                
+                if (valA === null || valA === undefined) return 1;
+                if (valB === null || valB === undefined) return -1;
+                
+                if (typeof valA === 'number' && typeof valB === 'number') {
+                    return sortDirection === 'asc' ? valA - valB : valB - valA;
+                }
+                
+                valA = String(valA).toLowerCase();
+                valB = String(valB).toLowerCase();
+                
+                if (sortDirection === 'asc') {
+                    return valA < valB ? -1 : valA > valB ? 1 : 0;
+                } else {
+                    return valA > valB ? -1 : valA < valB ? 1 : 0;
+                }
+            });
+            
+            const columns = Object.keys(currentData[0]);
+            const tbody = document.getElementById('tableBody');
+            if (tbody) {
+                tbody.innerHTML = renderTableRows(filteredData, columns);
+            }
+            
+            document.querySelectorAll('th').forEach(th => th.classList.remove('sorted'));
+            const headers = document.querySelectorAll('th');
+            const colIndex = columns.indexOf(column);
+            if (colIndex >= 0 && headers[colIndex]) {
+                headers[colIndex].classList.add('sorted');
+                const indicator = headers[colIndex].querySelector('.sort-indicator');
+                if (indicator) {
+                    indicator.textContent = sortDirection === 'asc' ? ' ▲' : ' ▼';
+                }
+            }
         }
 
-        // --- Schema Modal, Utility Functions (omitted for brevity, remain unchanged) ---
+        // --- Pagination ---
+        function updatePagination() {
+            const pagination = document.getElementById('pagination');
+            const pageInfo = document.getElementById('pageInfo');
+            
+            if (totalPages <= 1) {
+                pagination.style.display = 'none';
+                return;
+            }
+            
+            pagination.style.display = 'flex';
+            pageInfo.textContent = \`Page \${currentPage} of \${totalPages}\`;
+            
+            const pageSizeSelect = document.getElementById('pageSizeSelect');
+            pageSizeSelect.value = pageSize.toString();
+        }
+        
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                loadCurrentTable();
+            }
+        }
+        
+        function nextPage() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                loadCurrentTable();
+            }
+        }
+        
+        function goToFirstPage() {
+            if (currentPage !== 1) {
+                currentPage = 1;
+                loadCurrentTable();
+            }
+        }
+        
+        function goToLastPage() {
+            if (currentPage !== totalPages) {
+                currentPage = totalPages;
+                loadCurrentTable();
+            }
+        }
+        
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSizeSelect').value);
+            currentPage = 1;
+            loadCurrentTable();
+        }
+        
+        function loadCurrentTable() {
+            if (!currentTable) return;
+            
+            vscode.postMessage({
+                type: 'getTableData',
+                tableName: currentTable,
+                page: currentPage,
+                pageSize: pageSize
+            });
+        }
+        
+        // --- Query Panel ---
+        function toggleQueryPanel() {
+            const panel = document.getElementById('queryPanel');
+            const chevron = document.getElementById('queryChevron');
+            const toggleIcon = document.getElementById('queryToggleIcon');
+            
+            panel.classList.toggle('collapsed');
+            if (panel.classList.contains('collapsed')) {
+                chevron.className = 'fas fa-chevron-down';
+                toggleIcon.textContent = '(click to expand)';
+            } else {
+                chevron.className = 'fas fa-chevron-up';
+                toggleIcon.textContent = '(click to collapse)';
+            }
+        }
+        
+        function executeQuery() {
+            const query = document.getElementById('queryInput').value.trim();
+            if (!query) {
+                showError('Please enter a SQL query.');
+                return;
+            }
+            
+            vscode.postMessage({
+                type: 'executeQuery',
+                query: query
+            });
+            
+            document.getElementById('tableContent').innerHTML = \`
+                <div class="placeholder">
+                    <i class="fas fa-sync fa-spin" style="margin-right: 10px; font-size: 24px;"></i>
+                    <span>Executing query...</span>
+                </div>\`;
+        }
+        
+        function clearQuery() {
+            document.getElementById('queryInput').value = '';
+        }
+        
+        function displayQueryResult(message) {
+            if (!message.success) {
+                showError(\`Query execution failed: \${message.error}\`);
+                return;
+            }
+            
+            const data = message.data;
+            const tableContent = document.getElementById('tableContent');
+            
+            if (!data || data.length === 0) {
+                tableContent.innerHTML = '<div class="placeholder"><p>Query executed successfully. No results returned.</p></div>';
+                return;
+            }
+            
+            mainHeading.textContent = 'Query Results';
+            mainHeading.classList.add('table-name-heading');
+            
+            currentData = data;
+            filteredData = [...data];
+            const columns = Object.keys(data[0]);
+            
+            const tableGridHtml = \`
+                <div class="table-info-bar">
+                    <div class="table-controls">
+                        <input type="text" class="filter-input" placeholder="Filter results..." oninput="filterTableData(this.value)">
+                    </div>
+                    <span class="table-stats">
+                        <i class="fas fa-check-circle"></i>
+                        \${formatNumber(data.length)} rows returned
+                    </span>
+                </div>
+                <div class="table-wrapper">
+                    <table id="dataTable">
+                        <thead>
+                            <tr>
+                                \${columns.map(col => \`<th onclick="sortTable('\${col}')">\${escapeHtml(col)}<span class="sort-indicator"></span></th>\`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            \${renderTableRows(data, columns)}
+                        </tbody>
+                    </table>
+                </div>
+            \`;
+            
+            tableContent.innerHTML = tableGridHtml;
+            document.getElementById('pagination').style.display = 'none';
+        }
+        
+        // --- Export Functions ---
+        function exportToCSV() {
+            if (!currentData || currentData.length === 0) return;
+            
+            const columns = Object.keys(currentData[0]);
+            let csv = columns.map(col => \`"\${col}"\`).join(',') + '\\n';
+            
+            currentData.forEach(row => {
+                const values = columns.map(col => {
+                    const val = row[col];
+                    if (val === null || val === undefined) return '""';
+                    return \`"\${String(val).replace(/"/g, '""')}"\`;
+                });
+                csv += values.join(',') + '\\n';
+            });
+            
+            downloadFile(csv, \`\${currentTable || 'query_result'}.csv\`, 'text/csv');
+        }
+        
+        function exportToJSON() {
+            if (!currentData || currentData.length === 0) return;
+            
+            const json = JSON.stringify(currentData, null, 2);
+            downloadFile(json, \`\${currentTable || 'query_result'}.json\`, 'application/json');
+        }
+        
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // --- Cell Preview Modal ---
+        function showCellPreview(columnName, value) {
+            document.getElementById('cellPreviewTitle').textContent = \`Column: \${columnName}\`;
+            document.getElementById('cellPreviewBody').textContent = value === 'NULL' ? '(NULL)' : value;
+            document.getElementById('cellPreviewModal').style.display = 'flex';
+        }
+        
+        function closeCellPreview(event) {
+            if (!event || event.target.id === 'cellPreviewModal') {
+                document.getElementById('cellPreviewModal').style.display = 'none';
+            }
+        }
+
+        // --- Schema Modal ---
         function openSchemaModal() {
             if (!currentTable || currentSchema.length === 0) {
                 showError('Could not load schema data for the selected table.');
@@ -743,7 +1617,6 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             }
             document.getElementById('modalTableName').textContent = \`Schema for: \${currentTable}\`;
             const schemaContainer = document.getElementById('schemaTableContainer');
-            // PRAGMA table_info returns: cid, name, type, notnull, dflt_value, pk
             const schemaHtml = \`
                 <table class="schema-table">
                     <thead>
@@ -769,6 +1642,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             document.getElementById('schemaModal').style.display = 'none';
         }
 
+        // --- Utility Functions ---
         function formatValue(value) {
             if (value === null || value === undefined) { return 'NULL'; }
             if (typeof value === 'object') { try { return JSON.stringify(value); } catch { return '[Object]'; } }
@@ -779,11 +1653,87 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
             return String(text).replace(/[&<>"']/g, m => map[m]);
         }
+        
+        function formatNumber(num) {
+            return new Intl.NumberFormat().format(num);
+        }
 
         function showError(message) {
             const errorContainer = document.getElementById('errorContainer');
-            errorContainer.innerHTML = \`<div class="error"><strong>Error:</strong> \${escapeHtml(message)}</div>\`;
-            document.getElementById('tableContent').innerHTML = '<div class="placeholder">An error occurred. Please check the extension logs.</div>';
+            errorContainer.innerHTML = \`<div class="error"><strong>⚠️ Error:</strong> \${escapeHtml(message)}</div>\`;
+        }
+
+        // --- New Feature Functions ---
+        function refreshTable() {
+            if (!currentTable) {
+                showNotification('No table selected', 'warning');
+                return;
+            }
+            loadTable(currentTable);
+            showNotification('Table refreshed successfully', 'success');
+        }
+
+        function copyCellValue(element) {
+            const value = element.textContent;
+            const dataType = element.getAttribute('data-type');
+            
+            navigator.clipboard.writeText(value).then(() => {
+                showNotification(\`Copied \${dataType || 'value'} to clipboard\`, 'success');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showNotification('Failed to copy to clipboard', 'error');
+            });
+        }
+
+        function copyAllData() {
+            if (!currentData || currentData.length === 0) {
+                showNotification('No data to copy', 'warning');
+                return;
+            }
+
+            const columns = Object.keys(currentData[0]);
+            let textData = columns.join('\\t') + '\\n';
+            
+            currentData.forEach(row => {
+                const values = columns.map(col => {
+                    const val = row[col];
+                    if (val === null || val === undefined) return '';
+                    return String(val);
+                });
+                textData += values.join('\\t') + '\\n';
+            });
+
+            navigator.clipboard.writeText(textData).then(() => {
+                showNotification(\`Copied \${currentData.length} rows to clipboard\`, 'success');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showNotification('Failed to copy to clipboard', 'error');
+            });
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = \`notification notification-\${type}\`;
+            notification.textContent = message;
+            notification.style.cssText = \`
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                background: \${type === 'success' ? '#107c10' : type === 'error' ? '#e81123' : '#0078d4'};
+                color: white;
+                border-radius: 4px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                z-index: 10000;
+                animation: slideIn 0.3s ease-out;
+            \`;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
         }
     </script>
 </body>

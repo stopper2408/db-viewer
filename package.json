@@ -1,8 +1,8 @@
 {
   "name": "db-viewer",
   "displayName": "DB Viewer",
-  "description": "View and explore SQLite database files with a beautiful table interface. Supports .db, .sqlite, .sqlite3, .db3, .s3db, .sl3, and more.",
-  "version": "1.0.1",
+  "description": "Ultimate SQLite database viewer with advanced features: sortable columns, data export (CSV/JSON), SQL query editor, pagination, real-time filtering, and beautiful UI. Perfect for exploring .db, .sqlite, .sqlite3 files!",
+  "version": "1.0.2",
   "publisher": "MJStudio",
   "author": {
           "name": "Mujeeb ur Rehman"
@@ -17,7 +17,12 @@
     "sql",
     "sqlite3",
     "database viewer",
-    "sql viewer"
+    "sql viewer",
+    "export csv",
+    "export json",
+    "query editor",
+    "pagination",
+    "data explorer"
   ],
   "engines": {
     "vscode": "^1.105.0"
