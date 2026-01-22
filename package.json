@@ -2,10 +2,10 @@
   "name": "db-viewer",
   "displayName": "DB Viewer",
   "description": "Ultimate SQLite database viewer with advanced features: sortable columns, data export (CSV/JSON), SQL query editor, pagination, real-time filtering, and beautiful UI. Perfect for exploring .db, .sqlite, .sqlite3 files!",
-  "version": "1.0.2",
-  "publisher": "MJStudio",
+  "version": "1.0.0",
+  "publisher": "stopper2408",
   "author": {
-          "name": "Mujeeb ur Rehman"
+    "name": "stopper2408"
   },
   "license": "MIT",
   "icon": "icon.png",
@@ -22,7 +22,17 @@
     "export json",
     "query editor",
     "pagination",
-    "data explorer"
+    "data explorer",
+    "sqlite manager",
+    "sqlite browser",
+    "db browser",
+    "table viewer",
+    "data visualization",
+    "db explorer",
+    "sqlite gui",
+    "database gui",
+    "csv",
+    "json"
   ],
   "engines": {
     "vscode": "^1.105.0"
@@ -108,6 +118,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/thedatascientiist/db-viewer.git"
-  }
+    "url": "https://github.com/stopper2408/db-viewer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/stopper2408/db-viewer/issues"
+  },
+  "homepage": "https://github.com/stopper2408/db-viewer#readme"
 }
+
