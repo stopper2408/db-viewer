@@ -67,7 +67,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
     private async loadDatabase(uri: vscode.Uri, webview: vscode.Webview) {
         try {
             console.log(`[DB Viewer] Loading database: ${uri.fsPath}`);
-            
+
             const SQL = await initSqlJs({
                 locateFile: file => {
                     return path.join(__dirname, file);
@@ -76,9 +76,9 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
 
             const buffer = fs.readFileSync(uri.fsPath);
             console.log(`[DB Viewer] File size: ${buffer.length} bytes`);
-            
+
             const db = new SQL.Database(buffer);
-            
+
             // Get all tables with row counts
             const result = db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
             const tableNames: string[] = result.length > 0 ? result[0].values.map(row => row[0] as string) : [];
@@ -96,7 +96,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             });
 
             console.log(`[DB Viewer] Found ${tableNames.length} tables: ${tableNames.join(', ')}`);
-            
+
             db.close();
 
             webview.postMessage({
@@ -116,7 +116,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
     private async loadTableData(uri: vscode.Uri, tableName: string, webview: vscode.Webview, page: number = 1, pageSize: number = 100) {
         try {
             console.log(`[DB Viewer] Loading table: ${tableName} (page ${page}, size ${pageSize})`);
-            
+
             const SQL = await initSqlJs({
                 locateFile: file => {
                     return path.join(__dirname, file);
@@ -148,7 +148,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             if (dataResult.length > 0) {
                 const columns = dataResult[0].columns;
                 const values = dataResult[0].values;
-                
+
                 values.forEach(row => {
                     const obj: any = {};
                     columns.forEach((col, index) => {
@@ -183,7 +183,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
     private async executeCustomQuery(uri: vscode.Uri, query: string, webview: vscode.Webview) {
         try {
             console.log(`[DB Viewer] Executing custom query: ${query}`);
-            
+
             const SQL = await initSqlJs({
                 locateFile: file => {
                     return path.join(__dirname, file);
@@ -201,7 +201,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             if (result.length > 0) {
                 const columns = result[0].columns;
                 const values = result[0].values;
-                
+
                 values.forEach(row => {
                     const obj: any = {};
                     columns.forEach((col, index) => {
@@ -231,8 +231,9 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
     }
 
     private getHtmlForWebview(webview: vscode.Webview): string {
-    return `<!DOCTYPE html>
+        return `<!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -314,25 +315,32 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             box-sizing: border-box;
         }
         
+        html, body {
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
         body {
             font-family: var(--vscode-font-family);
-            margin: 0;
-            padding: 15px; 
             background: var(--vscode-editor-background);
             color: var(--dark);
-            min-height: 100vh;
-            overflow: hidden; 
             display: flex;
+            flex-direction: column;
         }
 
         .layout {
             display: flex;
             gap: 20px;
-            max-width: 100%;
             width: 100%;
-            margin: 0 auto;
+            height: 100%;
+            padding: 15px;
+            box-sizing: border-box;
             flex: 1;
             overflow: hidden;
+            min-height: 0;
         }
         
         /* --- Sidebar (Table Selector) --- */
@@ -502,6 +510,8 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            min-width: 0;
+            min-height: 0;
             animation: fadeIn 0.4s ease-out;
         }
         
@@ -642,8 +652,11 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         /* --- Table View --- */
         .data-panel {
             flex: 1;
-            overflow-y: auto;
+            overflow-y: hidden;
             border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
 
         #tableContent {
@@ -651,11 +664,13 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            min-height: 0;
         }
 
         .table-wrapper {
-            overflow-x: auto;
+            overflow: auto;
             flex: 1;
+            min-height: 0;
         }
 
         .table-info-bar {
@@ -1024,9 +1039,9 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             font-weight: 600;
             text-transform: uppercase;
         }
-
     </style>
 </head>
+
 <body>
     <div class="layout">
         <div class="sidebar">
@@ -1063,7 +1078,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                     </button>
                 </div>
             </div>
-            
+
             <!-- SQL Query Panel -->
             <div class="query-panel collapsed" id="queryPanel">
                 <div class="query-header" onclick="toggleQueryPanel()">
@@ -1082,15 +1097,16 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                     </div>
                 </div>
             </div>
-            
+
             <div id="errorContainer"></div>
 
             <div class="data-panel" id="tableContent">
                 <div class="placeholder">
-                    <p><i class="fas fa-hand-pointer" style="font-size: 48px; opacity: 0.3; margin-bottom: 15px;"></i><br>Select a table from the sidebar to view its contents.</p>
+                    <p><i class="fas fa-hand-pointer" style="font-size: 48px; opacity: 0.3; margin-bottom: 15px;"></i>
+                        <br>Select a table from the sidebar to view its contents.</p>
                 </div>
             </div>
-            
+
             <div class="pagination" id="pagination" style="display:none;">
                 <button onclick="goToFirstPage()"><i class="fas fa-angle-double-left"></i></button>
                 <button onclick="previousPage()"><i class="fas fa-angle-left"></i> Previous</button>
@@ -1737,6 +1753,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         }
     </script>
 </body>
+
 </html>`;
-}
+    }
 }
