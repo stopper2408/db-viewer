@@ -5,13 +5,17 @@
 ![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
+## 📌 About This Version
+
+This is a community-maintained fork of the original [DB Viewer](https://github.com/thedatascientiist/db-viewer) extension created by **Mujeeb ur Rehman**. The original repository no longer seems to be active, so this version has been published to ensure the extension continues to be available, compatible with modern VS Code versions, and maintained with bug fixes and improvements. We are grateful to the original author for their work.
+
 *Your all-in-one solution for exploring SQLite databases without leaving VS Code.*
 
 ---
 
 ## Preview
 
-![DB Viewer Interface](https://raw.githubusercontent.com/thedatascientiist/db-viewer/master/view.png)
+![DB Viewer Interface](https://raw.githubusercontent.com/stopper2408/db-viewer/master/view.png)
 
 ## Why DB Viewer?
 
@@ -217,11 +221,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you find this extension helpful:
 - ⭐ Rate it on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=MJStudio.db-viewer)
-- 🐛 Report bugs on [GitHub Issues](https://github.com/thedatascientiist/db-viewer/issues)
-- 💡 Suggest features on [GitHub Discussions](https://github.com/thedatascientiist/db-viewer/discussions)
+- 🐛 Report bugs on [GitHub Issues](https://github.com/stopper2408/db-viewer/issues)
+- 💡 Suggest features on [GitHub Discussions](https://github.com/stopper2408/db-viewer/discussions)
 
 ---
 
-**Made with ❤️ by Mujeeb ur Rehman**
+**Maintained by [stopper2408](https://github.com/stopper2408)**
+
+*Originally created with ❤️ by [Mujeeb ur Rehman](https://github.com/thedatascientiist)*
 
 *Making database exploration beautiful and accessible*
+
