@@ -1,11 +1,11 @@
 {
-  "name": "db-viewer",
-  "displayName": "DB Viewer",
+  "name": "db-viewer-enhanced",
+  "displayName": "DB Viewer Enhanced",
   "description": "Ultimate SQLite database viewer with advanced features: sortable columns, data export (CSV/JSON), SQL query editor, pagination, real-time filtering, and beautiful UI. Perfect for exploring .db, .sqlite, .sqlite3 files!",
-  "version": "1.0.0",
-  "publisher": "stopper2408",
+  "version": "1.0.3",
+  "publisher": "community-dev",
   "author": {
-    "name": "stopper2408"
+    "name": "Community Dev"
   },
   "license": "MIT",
   "icon": "icon.png",
@@ -32,7 +32,8 @@
     "sqlite gui",
     "database gui",
     "csv",
-    "json"
+    "json",
+    "view"
   ],
   "engines": {
     "vscode": "^1.105.0"

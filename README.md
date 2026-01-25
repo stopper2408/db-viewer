@@ -1,234 +1,112 @@
-# DB Viewer
+# 🗄️ DB Viewer Enhanced
 
-**A beautiful, intuitive SQLite database viewer built right into Visual Studio Code**
+**The Ultimate SQLite Database Explorer for VS Code**
 
-![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
-
-## 📌 About This Version
-
-This is a community-maintained fork of the original [DB Viewer](https://github.com/thedatascientiist/db-viewer) extension created by **Mujeeb ur Rehman**. The original repository no longer seems to be active, so this version has been published to ensure the extension continues to be available, compatible with modern VS Code versions, and maintained with bug fixes and improvements. We are grateful to the original author for their work.
-
-*Your all-in-one solution for exploring SQLite databases without leaving VS Code.*
+[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://marketplace.visualstudio.com/items?itemName=community-dev.db-viewer-enhanced)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![VS Code](https://img.shields.io/badge/Built%20for-VS%20Code-007ACC.svg)](https://code.visualstudio.com/)
 
 ---
 
-## Preview
+## 🚀 Overview
 
-![DB Viewer Interface](https://raw.githubusercontent.com/stopper2408/db-viewer/master/view.png)
+**DB Viewer Enhanced** is a powerful community-maintained extension that brings a full-featured SQLite database manager directly into Visual Studio Code. 
 
-## Why DB Viewer?
+Whether you are debugging a local application, analyzing data, or just need to quickly peek into a `.db` file, this extension provides a beautiful, native-feeling interface to explore your data without ever leaving your editor.
 
-Tired of switching between VS Code and external database tools? **DB Viewer** brings the power of SQLite database exploration directly into your favorite editor. With a beautiful, native interface that feels like part of VS Code itself, you can instantly inspect and understand your database structure and data.
+> **Note:** This is an enhanced fork of the original DB Viewer, updated for modern VS Code compatibility, improved performance, and new features.
 
-## ✨ Features
+---
 
-### 🎨 Beautiful & Intuitive Interface
-- **Smart Table Navigation** - Clean sidebar with all tables and row counts
-- **Real-time Search** - Filter tables instantly by name
-- **Row Count Badges** - See table sizes at a glance
-- **Smooth Animations** - Delightful transitions and loading states
+## ✨ Key Features
 
-### 🔍 Advanced Data Exploration
-- **Sortable Columns** - Click any column header to sort (ascending/descending)
-- **Data Filtering** - Real-time search across all columns
-- **Cell Preview** - Click any cell to view full content
-- **Copy Cell Values** - One-click copy of any data cell
-- **Pagination Controls** - Navigate large tables with customizable page sizes (50/100/200/500 rows)
-- **Responsive Table View** - Horizontal scrolling for wide tables
-- **Data Type Color Coding** - Visual distinction for numbers, strings, NULL values
+### 📊 Interactive Data Explorer
+*   **Smart Table Navigation**: Quickly switch between tables using the sidebar with real-time row counts.
+*   **Sorting & Filtering**: Click headers to sort columns and use the search bar to filter data instantly.
+*   **Pagination**: Efficiently handle large datasets with customizable page sizes (50, 100, 200, 500 rows).
+*   **Cell Inspection**: Click any cell to view deep content, ideal for examining large text blobs or JSON data.
 
-### 💾 Export Capabilities
-- **CSV Export** - Download table data as CSV with one click
-- **JSON Export** - Export data in JSON format for APIs or scripts
-- **Copy All Data** - Copy entire table to clipboard
+### 🛠️ Data Management Tools
+*   **SQL Query Editor**: Run custom SQL queries in a built-in editor with syntax highlighting.
+*   **Export Options**: Export table data or query results to **CSV** or **JSON** for use in other applications.
+*   **Copy Support**: One-click copy for individual cells or entire tables.
 
-### 🚀 SQL Query Editor
-- **Custom Queries** - Run any SQL query on your database
-- **Collapsible Panel** - Built-in query editor
-- **Query Results** - View results in the same beautiful table format
-- **Safe Read-Only** - All queries are read-only for data safety
+### 🎨 Seamless Integration
+*   **Native Look & Feel**: Designed to match your VS Code theme (Dark/Light mode supported).
+*   **Read-Only Safety**: By default, the viewer opens in a safe mode to prevent accidental data modification.
+*   **Responsive Design**: Smooth scrolling and responsive layouts for wide tables.
 
-### ⌨️ Keyboard Shortcuts
-- `Ctrl+R` or `F5` - Refresh current table
-- `Ctrl+F` - Focus search input
-- `Ctrl+Shift+C` - Copy all table data
+---
 
-### 🎯 Native VS Code Experience
-- Seamless integration with VS Code themes
-- Responsive design that adapts to your workspace
-- Auto dark mode support
-- Professional Microsoft Blue color scheme
+## 📂 Supported File Formats
 
-## 🚀 Quick Start
-
-Getting started takes seconds:
-
-1. **Locate your database file** in VS Code's Explorer
-2. **Click on any SQLite database file** (`.db`, `.sqlite`, `.sqlite3`, etc.)
-3. **The database opens automatically** in the beautiful viewer
-
-That's it! Your database will open in an interactive viewer.
-
-## 📦 Installation
-
-### From VS Code Marketplace
-
-1. Open VS Code
-2. Go to **Extensions** (`Ctrl+Shift+X`)
-3. Search for **"DB Viewer"**
-4. Click **Install**
-
-### From Command Line
-
-```bash
-code --install-extension MJStudio.db-viewer
-```
-
-## 🎯 Supported File Types
+DB Viewer automatically detects and handles a wide range of SQLite file extensions:
 
 | Extension | Description |
-|-----------|-------------|
-| `.db` | SQLite Database |
+| :--- | :--- |
+| `.db` | Generic Database File |
 | `.sqlite` | SQLite Database |
 | `.sqlite3` | SQLite 3 Database |
-| `.db3` | SQLite 3 Database |
+| `.db3` | Database File v3 |
 | `.s3db` | SQLite 3 Database |
 | `.sl3` | SQLite 3 Database |
-| `.sdb` | SQLite Database |
-| `.sqlitedb` | SQLite Database |
-
-## 📖 Usage Guide
-
-### Opening Databases
-
-- **Click File** - Simply click any supported database file to open it
-- **Right-Click** - Right-click file → "Open with Database Viewer"
-- **Command Palette** - `Ctrl+Shift+P` → "Open Database"
-
-### Exploring Your Data
-
-1. **Browse Tables** - See all tables in the left sidebar with row counts
-2. **View Data** - Click any table to view its contents
-3. **Sort & Filter** - Click column headers to sort, use search to filter
-4. **Copy Data** - Click any cell to copy its value
-5. **Export** - Use export buttons for CSV or JSON downloads
-6. **Run Queries** - Open SQL editor panel to run custom queries
-
-### Interface Overview
-
-```
-┌─────────────────────────────────────────────────┐
-│  Tables Sidebar    │    Main Data Viewer        │
-│  ─────────────     │    ─────────────────       │
-│  🔍 Search         │    Filter: [________]      │
-│                    │                            │
-│  📊 users (1,243)  │    ┌─────┬─────┬──────┐   │
-│  📊 posts (892)    │    │ id  │name │email │   │
-│  📊 comments (...)  │    ├─────┼─────┼──────┤   │
-│                    │    │  1  │John │...   │   │
-│                    │    │  2  │Jane │...   │   │
-│                    │    └─────┴─────┴──────┘   │
-│                    │                            │
-│                    │    [Prev] Page 1/10 [Next] │
-└─────────────────────────────────────────────────┘
-```
-
-## 🎨 Performance & Optimization
-
-DB Viewer is optimized for smooth performance:
-
-| Feature | Capability |
-|---------|------------|
-| **Pagination** | 50-500 rows per page |
-| **Sorting** | All columns, instant sorting |
-| **Filtering** | Real-time search with instant results |
-| **Export** | Full table export in CSV/JSON |
-| **SQL Queries** | Full SELECT query support |
-| **Responsive** | Handles wide tables with horizontal scroll |
-
-## 🔧 Troubleshooting
-
-### Database won't open
-- Verify file is a valid SQLite database
-- Check file permissions
-- Try reloading VS Code window (`Ctrl+Shift+P` → "Developer: Reload Window")
-
-### Tables appear empty
-- Verify table contains data using SQLite CLI
-- Check database isn't corrupted
-- Try refreshing with `Ctrl+R`
-
-### UI looks broken
-- Reload VS Code window
-- Check for extension updates
-- Try switching VS Code theme
-
-## 🆕 What's New in v1.0.2
-
-- ✅ **Copy Cell Functionality** - Click any cell to copy value
-- ✅ **Copy All Data** - Copy entire table to clipboard
-- ✅ **Refresh Button** - Reload table data with one click
-- ✅ **Responsive Tables** - Better handling of wide tables
-- ✅ **Improved Copy Button** - Cleaner, more professional tooltip
-- ✅ **Data Type Color Coding** - Visual distinction for different data types
-- ✅ **Keyboard Shortcuts** - Quick access to common actions
-- ✅ **Table Alignment** - Perfect alignment between header and data
-
-## 📝 Changelog
-
-### Version 1.0.2 (Latest)
-- Added cell copy functionality
-- Added copy all data feature
-- Added refresh button
-- Improved responsive table design
-- Enhanced copy button styling
-- Added data type color coding
-- Added keyboard shortcuts
-
-### Version 1.0.1
-- SQL Query Interface
-- CSV & JSON Export
-- Data Filtering & Sorting
-- Pagination support
-- Table search in sidebar
-
-### Version 1.0.0
-- Initial release
-- Basic SQLite viewer
-- Table browsing
-- Data display
-
-## 🛣️ Roadmap
-
-- [ ] Schema visualization with ER diagrams
-- [ ] Query history and saved queries
-- [ ] Advanced column-specific filters
-- [ ] Binary data preview (images)
-- [ ] Multiple table tabs
-- [ ] Query templates and snippets
-- [ ] Database statistics dashboard
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 💖 Support
-
-If you find this extension helpful:
-- ⭐ Rate it on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=MJStudio.db-viewer)
-- 🐛 Report bugs on [GitHub Issues](https://github.com/stopper2408/db-viewer/issues)
-- 💡 Suggest features on [GitHub Discussions](https://github.com/stopper2408/db-viewer/discussions)
+| `.sdb` | Simple Database |
+| `.sqlitedb`| SQLite Database |
 
 ---
 
-**Maintained by [stopper2408](https://github.com/stopper2408)**
+## 📖 How to Use
 
-*Originally created with ❤️ by [Mujeeb ur Rehman](https://github.com/thedatascientiist)*
+### Opening a Database
+1.  Locate your database file in the VS Code File Explorer.
+2.  Simply **click** on the file to open it in the DB Viewer.
+3.  Alternatively, right-click the file and select **"Open With..."** -> **"DB Viewer Enhanced"**.
 
-*Making database exploration beautiful and accessible*
+### Running SQL Queries
+1.  Open the **"Execute SQL"** panel at the top of the viewer.
+2.  Type your SQL query (e.g., `SELECT * FROM users WHERE active = 1`).
+3.  Click **Run Query** to see the results in the table view.
+
+### Exporting Data
+1.  Navigate to the table or query result you want to save.
+2.  Click the **Export CSV** or **Export JSON** buttons in the toolbar.
+3.  Choose a location to save your file.
+
+---
+
+## ⌨️ Development & Contributing
+
+We welcome contributions! If you want to run the extension locally or contribute to the code:
+
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/stopper2408/db-viewer.git
+    cd db-viewer
+    ```
+
+2.  **Install dependencies**
+    ```bash
+    npm install
+    ```
+
+3.  **Run in Debug Mode**
+    *   Press `F5` in VS Code to launch the Extension Development Host.
+
+4.  **Build**
+    ```bash
+    npm run compile
+    ```
+
+---
+
+## 📜 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## 🙏 Acknowledgements
+
+*   Original work by [Mujeeb ur Rehman](https://github.com/thedatascientiist).
+*   Powered by [sql.js](https://github.com/sql-js/sql.js).
 
