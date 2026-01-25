@@ -1,9 +1,21 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
-import initSqlJs, { Database } from 'sql.js';
+import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 
-export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
+class SqliteDocument implements vscode.CustomDocument {
+    constructor(
+        public readonly uri: vscode.Uri,
+        public readonly db: Database
+    ) { }
+
+    dispose(): void {
+        this.db.close();
+    }
+}
+
+export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider<SqliteDocument> {
+    private static sqlJs: SqlJsStatic | undefined;
+
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
         const provider = new DbViewerProvider(context);
         const providerRegistration = vscode.window.registerCustomEditorProvider(
@@ -12,7 +24,8 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             {
                 webviewOptions: {
                     retainContextWhenHidden: true,
-                }
+                },
+                supportsMultipleEditorsPerDocument: false
             }
         );
         return providerRegistration;
@@ -24,19 +37,34 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         private readonly context: vscode.ExtensionContext
     ) { }
 
+    private escapeId(id: string): string {
+        return '"' + id.replace(/"/g, '""') + '"';
+    }
+
+    private async getSqlJs(): Promise<SqlJsStatic> {
+        if (!DbViewerProvider.sqlJs) {
+             DbViewerProvider.sqlJs = await initSqlJs({
+                locateFile: file => {
+                    return path.join(__dirname, file);
+                }
+            });
+        }
+        return DbViewerProvider.sqlJs;
+    }
+
     async openCustomDocument(
         uri: vscode.Uri,
         openContext: vscode.CustomDocumentOpenContext,
         token: vscode.CancellationToken
-    ): Promise<vscode.CustomDocument> {
-        return {
-            uri,
-            dispose: () => { }
-        };
+    ): Promise<SqliteDocument> {
+        const SQL = await this.getSqlJs();
+        const buffer = await vscode.workspace.fs.readFile(uri);
+        const db = new SQL.Database(buffer);
+        return new SqliteDocument(uri, db);
     }
 
     async resolveCustomEditor(
-        document: vscode.CustomDocument,
+        document: SqliteDocument,
         webviewPanel: vscode.WebviewPanel,
         token: vscode.CancellationToken
     ): Promise<void> {
@@ -47,62 +75,100 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
 
         // Load database and send data to webview
-        this.loadDatabase(document.uri, webviewPanel.webview);
+        this.loadDatabaseInfo(document, webviewPanel.webview);
 
         // Handle messages from the webview
         webviewPanel.webview.onDidReceiveMessage(
             async message => {
                 switch (message.type) {
                     case 'getTableData':
-                        await this.loadTableData(document.uri, message.tableName, webviewPanel.webview, message.page, message.pageSize);
+                        // Pass sort parameters to the table data loader
+                        await this.loadTableData(
+                            document, 
+                            message.tableName, 
+                            webviewPanel.webview, 
+                            message.page, 
+                            message.pageSize, 
+                            message.sortCol, 
+                            message.sortDir
+                        );
+                        break;
+                    case 'searchTable':
+                        await this.searchTableData(document, message.tableName, message.searchTerm, webviewPanel.webview, message.page, message.pageSize);
                         break;
                     case 'executeQuery':
-                        await this.executeCustomQuery(document.uri, message.query, webviewPanel.webview);
+                        await this.executeCustomQuery(document, message.query, webviewPanel.webview);
+                        break;
+                    case 'saveFile':
+                        await this.saveFile(message.content, message.filename, message.fileType);
                         break;
                 }
             }
         );
     }
 
-    private async loadDatabase(uri: vscode.Uri, webview: vscode.Webview) {
+    private async saveFile(content: string, defaultFilename: string, fileType: string) {
+        const filters: { [name: string]: string[] } = {};
+        if (fileType === 'csv') {
+            filters['CSV Files'] = ['csv'];
+        } else if (fileType === 'json') {
+            filters['JSON Files'] = ['json'];
+        } else {
+             filters['Text Files'] = ['txt'];
+        }
+
+        const uri = await vscode.window.showSaveDialog({
+            defaultUri: vscode.Uri.file(defaultFilename),
+            filters: filters
+        });
+
+        if (uri) {
+            try {
+                await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
+                vscode.window.showInformationMessage(`File saved successfully to ${uri.fsPath}`);
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to save file: ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+    }
+
+    private async loadDatabaseInfo(document: SqliteDocument, webview: vscode.Webview) {
         try {
-            console.log(`[DB Viewer] Loading database: ${uri.fsPath}`);
+            console.log(`[DB Viewer] Loading database info for: ${document.uri.toString()}`);
+            const db = document.db;
 
-            const SQL = await initSqlJs({
-                locateFile: file => {
-                    return path.join(__dirname, file);
-                }
-            });
-
-            const buffer = fs.readFileSync(uri.fsPath);
-            console.log(`[DB Viewer] File size: ${buffer.length} bytes`);
-
-            const db = new SQL.Database(buffer);
-
-            // Get all tables with row counts
+            // Get all tables
             const result = db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
             const tableNames: string[] = result.length > 0 ? result[0].values.map(row => row[0] as string) : [];
 
-            // Get row counts for each table
-            const tablesWithCounts = tableNames.map(tableName => {
-                try {
-                    const countResult = db.exec(`SELECT COUNT(*) as count FROM "${tableName}"`);
-                    const rowCount = countResult.length > 0 ? countResult[0].values[0][0] as number : 0;
-                    return { name: tableName, rowCount };
-                } catch (err) {
-                    console.error(`[DB Viewer] Error getting count for ${tableName}:`, err);
-                    return { name: tableName, rowCount: 0 };
-                }
-            });
-
             console.log(`[DB Viewer] Found ${tableNames.length} tables: ${tableNames.join(', ')}`);
 
-            db.close();
+            // Send tables immediately with undefined counts
+            const initialTables = tableNames.map(name => ({ name, rowCount: undefined }));
 
             webview.postMessage({
                 type: 'databaseLoaded',
-                tables: tablesWithCounts
+                tables: initialTables
             });
+
+            // Asynchronously fetch counts
+            for (const tableName of tableNames) {
+                // Yield to event loop to prevent freezing
+                await new Promise(resolve => setTimeout(resolve, 0));
+                
+                try {
+                    const countResult = db.exec(`SELECT COUNT(*) as count FROM ${this.escapeId(tableName)}`);
+                    const rowCount = countResult.length > 0 ? countResult[0].values[0][0] as number : 0;
+                    
+                    webview.postMessage({
+                        type: 'updateRowCount',
+                        tableName: tableName,
+                        rowCount: rowCount
+                    });
+                } catch (err) {
+                    console.error(`[DB Viewer] Error getting count for ${tableName}:`, err);
+                }
+            }
 
         } catch (error) {
             console.error('[DB Viewer] Error loading database:', error);
@@ -113,35 +179,44 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         }
     }
 
-    private async loadTableData(uri: vscode.Uri, tableName: string, webview: vscode.Webview, page: number = 1, pageSize: number = 100) {
+    private async loadTableData(
+        document: SqliteDocument,
+        tableName: string,
+        webview: vscode.Webview,
+        page: number = 1,
+        pageSize: number = 100,
+        sortCol?: string,
+        sortDir?: string
+    ) {
         try {
             console.log(`[DB Viewer] Loading table: ${tableName} (page ${page}, size ${pageSize})`);
-
-            const SQL = await initSqlJs({
-                locateFile: file => {
-                    return path.join(__dirname, file);
-                }
-            });
-
-            const buffer = fs.readFileSync(uri.fsPath);
-            const db = new SQL.Database(buffer);
+            const db = document.db;
 
             // Get table schema (use double quotes to escape table names)
-            const schemaResult = db.exec(`PRAGMA table_info("${tableName}")`);
+            const schemaResult = db.exec(`PRAGMA table_info(${this.escapeId(tableName)})`);
             const schema = schemaResult.length > 0 ? schemaResult[0].values : [];
 
-            // Get row count
-            const countResult = db.exec(`SELECT COUNT(*) as count FROM "${tableName}"`);
-            const rowCount = countResult.length > 0 ? countResult[0].values[0][0] as number : 0;
-
             // Calculate pagination
-            const offset = (page - 1) * pageSize;
-            const totalPages = Math.ceil(rowCount / pageSize);
+            const p = Math.max(1, parseInt(String(page)) || 1);
+            const size = Math.max(1, parseInt(String(pageSize)) || 100);
+            const offset = (p - 1) * size;
 
-            // Get table data with pagination
-            const dataResult = db.exec(`SELECT * FROM "${tableName}" LIMIT ${pageSize} OFFSET ${offset}`);
+            // Construct sort clause
+            let validSortDir = 'ASC';
+            if (sortDir && sortDir.toUpperCase() === 'DESC') {
+                validSortDir = 'DESC';
+            }
+            const sortClause = sortCol ? `ORDER BY ${this.escapeId(sortCol)} ${validSortDir}` : '';
 
-            console.log(`[DB Viewer] Table ${tableName}: ${rowCount} total rows, ${schema.length} columns, page ${page}/${totalPages}`);
+            // Get table data with pagination and sorting
+            const dataResult = db.exec(`SELECT * FROM ${this.escapeId(tableName)} ${sortClause} LIMIT ${size} OFFSET ${offset}`);
+
+            // Get row count
+            const countResult = db.exec(`SELECT COUNT(*) as count FROM ${this.escapeId(tableName)}`);
+            const rowCount = countResult.length > 0 ? countResult[0].values[0][0] as number : 0;
+            const totalPages = Math.ceil(rowCount / size);
+
+            console.log(`[DB Viewer] Table ${tableName}: ${rowCount} total rows, ${schema.length} columns, page ${p}/${totalPages}`);
 
             // Convert sql.js result format to JSON objects
             const data: any[] = [];
@@ -158,16 +233,14 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 });
             }
 
-            db.close();
-
             webview.postMessage({
                 type: 'tableData',
                 tableName: tableName,
                 schema: schema,
                 data: data,
                 rowCount: rowCount,
-                page: page,
-                pageSize: pageSize,
+                page: p,
+                pageSize: size,
                 totalPages: totalPages
             });
 
@@ -180,18 +253,77 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         }
     }
 
-    private async executeCustomQuery(uri: vscode.Uri, query: string, webview: vscode.Webview) {
+    private async searchTableData(document: SqliteDocument, tableName: string, searchTerm: string, webview: vscode.Webview, page: number = 1, pageSize: number = 100) {
         try {
-            console.log(`[DB Viewer] Executing custom query: ${query}`);
+            console.log(`[DB Viewer] Searching table: ${tableName} for "${searchTerm}" (page ${page}, size ${pageSize})`);
+            const db = document.db;
 
-            const SQL = await initSqlJs({
-                locateFile: file => {
-                    return path.join(__dirname, file);
-                }
+            // Get table schema (use double quotes to escape table names)
+            const schemaResult = db.exec(`PRAGMA table_info(${this.escapeId(tableName)})`);
+            const schema = schemaResult.length > 0 ? schemaResult[0].values : [];
+
+            // Construct WHERE clause
+            // Escape single quotes in search term to prevent SQL errors
+            const safeSearchTerm = searchTerm.replace(/'/g, "''");
+            const columns = schema.map((col: any) => col[1]); // col[1] is name
+            const whereClause = columns.map((col: any) => `${this.escapeId(col)} LIKE '%${safeSearchTerm}%'`).join(' OR ');
+            
+            // Get row count
+            const countQuery = `SELECT COUNT(*) as count FROM ${this.escapeId(tableName)} WHERE ${whereClause}`;
+            const countResult = db.exec(countQuery);
+            const rowCount = countResult.length > 0 ? countResult[0].values[0][0] as number : 0;
+
+            // Calculate pagination
+            const p = Math.max(1, parseInt(String(page)) || 1);
+            const size = Math.max(1, parseInt(String(pageSize)) || 100);
+            const offset = (p - 1) * size;
+            const totalPages = Math.ceil(rowCount / size);
+
+            // Get table data with pagination
+            const dataQuery = `SELECT * FROM ${this.escapeId(tableName)} WHERE ${whereClause} LIMIT ${size} OFFSET ${offset}`;
+            const dataResult = db.exec(dataQuery);
+
+            console.log(`[DB Viewer] Search found ${rowCount} rows, page ${p}/${totalPages}`);
+
+            // Convert sql.js result format to JSON objects
+            const data: any[] = [];
+            if (dataResult.length > 0) {
+                const columns = dataResult[0].columns;
+                const values = dataResult[0].values;
+
+                values.forEach(row => {
+                    const obj: any = {};
+                    columns.forEach((col, index) => {
+                        obj[col] = row[index];
+                    });
+                    data.push(obj);
+                });
+            }
+
+            webview.postMessage({
+                type: 'tableData',
+                tableName: tableName,
+                schema: schema,
+                data: data,
+                rowCount: rowCount,
+                page: p,
+                pageSize: size,
+                totalPages: totalPages
             });
 
-            const buffer = fs.readFileSync(uri.fsPath);
-            const db = new SQL.Database(buffer);
+        } catch (error) {
+            console.error(`[DB Viewer] Error searching table ${tableName}:`, error);
+            webview.postMessage({
+                type: 'error',
+                message: `Failed to search table data: ${error instanceof Error ? error.message : String(error)}`
+            });
+        }
+    }
+    
+    private async executeCustomQuery(document: SqliteDocument, query: string, webview: vscode.Webview) {
+        try {
+            console.log(`[DB Viewer] Executing custom query: ${query}`);
+            const db = document.db;
 
             // Execute the query
             const result = db.exec(query);
@@ -210,8 +342,6 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                     data.push(obj);
                 });
             }
-
-            db.close();
 
             webview.postMessage({
                 type: 'queryResult',
@@ -307,6 +437,71 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         @keyframes slideOut {
             from { transform: translateX(0); opacity: 1; }
             to { transform: translateX(20px); opacity: 0; }
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(50px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes slideOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(50px); opacity: 0; }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--vscode-scrollbarSlider-background);
+            border-radius: 10px;
+            border: 2px solid var(--vscode-editor-background); 
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--vscode-scrollbarSlider-hoverBackground);
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+
+        /* Notification Styles */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            color: white;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            backdrop-filter: blur(4px);
+        }
+
+        .notification-success { background: var(--success-color); }
+        .notification-error { background: var(--danger-color); }
+        .notification-warning { background: var(--warning-color); }
+        .notification-info { background: var(--info-color); }
+
+        .notification.show {
+            animation: slideInRight 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        .notification.hide {
+            animation: slideOutRight 0.3s ease-in forwards;
         }
         
         * {
@@ -471,10 +666,8 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             background: var(--vscode-list-activeSelectionBackground);
             color: var(--vscode-list-activeSelectionForeground);
             font-weight: 600;
-            margin: 0; 
-            padding: 10px var(--sidebar-padding); 
-            border-radius: 0;
             transform: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
         .table-item-link.active i.table-icon {
@@ -488,14 +681,6 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         
         .table-item-link .selection-arrow {
             display: none;
-            margin-right: 5px;
-            font-weight: 700;
-            font-size: 15px;
-            width: 10px;
-        }
-
-        .table-item-link.active .selection-arrow {
-            display: inline-block;
         }
 
 
@@ -832,30 +1017,39 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             border-bottom: 1px solid var(--border-color);
             font-size: 13px;
             cursor: pointer;
-            transition: var(--transition);
+            /* removed transition to prevent hover trail effect */
             position: relative;
         }
         
         td:hover {
             background-color: var(--vscode-list-hoverBackground) !important;
         }
-        
-        td:hover::after {
-            content: 'Copy';
+
+        td::after {
+            content: '\\f0c5'; /* Copy Icon */
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
             position: absolute;
             right: 8px;
             top: 50%;
-            transform: translateY(-50%);
-            font-size: 10px;
-            font-weight: 600;
-            color: white;
-            background: var(--primary-color);
-            padding: 3px 8px;
-            border-radius: 3px;
-            box-shadow: 0 2px 6px rgba(0, 120, 212, 0.4);
+            transform: translateY(-50%) scale(0.8);
+            font-size: 14px;
+            color: var(--primary-color);
+            background: var(--vscode-editor-background);
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            opacity: 0;
             pointer-events: none;
-            white-space: nowrap;
+            transition: all 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
             z-index: 10;
+        }
+        
+        td:hover::after {
+            opacity: 1;
+            transform: translateY(-50%) scale(1);
+            transition-delay: 0.05s;
         }
         
         tr:last-child td {
@@ -1156,6 +1350,9 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         let totalRows = 0;
         let sortColumn = null;
         let sortDirection = 'asc';
+        let currentSearchTerm = '';
+        let isQueryView = false;
+        let searchDebounceTimeout = null;
         const mainHeading = document.getElementById('mainHeading');
 
         // --- Message Handling from Extension ---
@@ -1166,6 +1363,9 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 case 'databaseLoaded':
                     allTables = message.tables;
                     displayTables(message.tables);
+                    break;
+                case 'updateRowCount':
+                    updateRowCount(message.tableName, message.rowCount);
                     break;
                 case 'tableData':
                     currentSchema = message.schema;
@@ -1218,19 +1418,26 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
 
             tables.forEach(table => {
                 const tableName = typeof table === 'string' ? table : table.name;
-                const rowCount = typeof table === 'object' ? table.rowCount : 0;
+                const rowCount = typeof table === 'object' ? table.rowCount : undefined;
                 
                 const li = document.createElement('li');
                 const link = document.createElement('a');
                 link.className = 'table-item-link';
                 link.setAttribute('data-table-name', tableName);
+                
+                let badgeHtml = '';
+                if (rowCount !== undefined && rowCount !== null) {
+                    badgeHtml = \`<span class="row-count-badge">\${formatNumber(rowCount)}</span>\`;
+                } else {
+                    badgeHtml = \`<span class="row-count-badge"><i class="fas fa-spinner fa-spin" style="font-size: 0.8em;"></i></span>\`;
+                }
+
                 link.innerHTML = \`
-                    <span class="selection-arrow">></span>
                     <div class="table-item-content">
                         <i class="fas fa-table table-icon"></i>
                         <span class="table-name">\${escapeHtml(tableName)}</span>
                     </div>
-                    <span class="row-count-badge">\${formatNumber(rowCount)}</span>
+                    \${badgeHtml}
                 \`;
                 link.onclick = (e) => {
                     e.preventDefault();
@@ -1239,6 +1446,30 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 li.appendChild(link);
                 tableList.appendChild(li);
             });
+        }
+
+        function updateRowCount(tableName, count) {
+            // Update internal data model
+            const tableIndex = allTables.findIndex(t => (typeof t === 'string' ? t : t.name) === tableName);
+            if (tableIndex !== -1) {
+                if (typeof allTables[tableIndex] === 'string') {
+                    allTables[tableIndex] = { name: tableName, rowCount: count };
+                } else {
+                    allTables[tableIndex].rowCount = count;
+                }
+            }
+
+            // Update UI
+            const links = document.querySelectorAll('.table-item-link');
+            for (const link of links) {
+                if (link.getAttribute('data-table-name') === tableName) {
+                    const badge = link.querySelector('.row-count-badge');
+                    if (badge) {
+                        badge.textContent = formatNumber(count);
+                    }
+                    break;
+                }
+            }
         }
         
         function filterTables() {
@@ -1258,9 +1489,11 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             element.classList.add('active');
             
             currentTable = tableName;
+            isQueryView = false;
             currentPage = 1;
             sortColumn = null;
             sortDirection = 'asc';
+            currentSearchTerm = '';
             
             document.getElementById('viewSchemaButton').style.display = 'none';
             document.getElementById('exportCsvButton').style.display = 'none';
@@ -1299,38 +1532,77 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 let emptyMessage = rowCount > 0 
                     ? 'Table data could not be loaded or is filtered.'
                     : 'The table is empty. No rows found.';
+                
+                // Check if controls already exist to preserve search input during empty search result
+                if (document.querySelector('.table-info-bar')) {
+                    // Just update the stats and table body
+                    const stats = document.querySelector('.table-stats');
+                    if (stats) {
+                        stats.innerHTML = \`<i class="fas fa-database"></i> \${formatNumber(rowCount)} total rows | \${schema.length} columns\`;
+                    }
+                    const tbody = document.getElementById('tableBody');
+                    if (tbody) {
+                        tbody.innerHTML = \`<tr><td colspan="\${schema.length}" style="text-align:center; padding: 20px; color: var(--gray);">No data found matching your search.</td></tr>\`;
+                    }
+                    updatePagination();
+                    return;
+                }
+
                 tableContent.innerHTML = \`<div class="placeholder"><p>\${emptyMessage}</p></div>\`;
                 document.getElementById('pagination').style.display = 'none';
                 return;
             }
 
             const columns = Object.keys(data[0]);
-            const tableGridHtml = \`
-                <div class="table-info-bar">
-                    <div class="table-controls">
-                        <input type="text" class="filter-input" placeholder="Filter rows..." oninput="filterTableData(this.value)">
-                    </div>
-                    <span class="table-stats">
-                        <i class="fas fa-database"></i>
-                        \${formatNumber(rowCount)} total rows | \${schema.length} columns
-                    </span>
-                </div>
-                <div class="table-wrapper">
-                    <table id="dataTable">
-                        <thead>
-                            <tr>
-                                \${columns.map(col => \`<th onclick="sortTable('\${col}')">\${escapeHtml(col)}<span class="sort-indicator"></span></th>\`).join('')}
-                            </tr>
-                        </thead>
-                        <tbody id="tableBody">
-                            \${renderTableRows(data, columns)}
-                        </tbody>
-                    </table>
-                </div>
-            \`;
 
-            tableContent.innerHTML = tableGridHtml;
+            // Check if table structure already exists to avoid re-rendering controls
+            if (document.getElementById('dataTable')) {
+                 // Update stats
+                const stats = document.querySelector('.table-stats');
+                if (stats) {
+                    stats.innerHTML = \`<i class="fas fa-database"></i> \${formatNumber(rowCount)} total rows | \${schema.length} columns\`;
+                }
+
+                // Update Header if schema changed (unlikely for same table, but safe)
+                const thead = document.querySelector('#dataTable thead tr');
+                if (thead && thead.children.length !== columns.length) {
+                     thead.innerHTML = columns.map(col => \`<th onclick="sortTable('\${col}')">\${escapeHtml(col)}<span class="sort-indicator"></span></th>\`).join('');
+                }
+
+                // Update Body
+                const tbody = document.getElementById('tableBody');
+                if (tbody) {
+                    tbody.innerHTML = renderTableRows(data, columns);
+                }
+            } else {
+                const tableGridHtml = \`
+                    <div class="table-info-bar">
+                        <div class="table-controls">
+                            <input type="text" class="filter-input" placeholder="Filter rows..." value="\${escapeHtml(currentSearchTerm)}" oninput="filterTableData(this.value)">
+                        </div>
+                        <span class="table-stats">
+                            <i class="fas fa-database"></i>
+                            \${formatNumber(rowCount)} total rows | \${schema.length} columns
+                        </span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="dataTable">
+                            <thead>
+                                <tr>
+                                    \${columns.map(col => \`<th onclick="sortTable('\${col}')">\${escapeHtml(col)}<span class="sort-indicator"></span></th>\`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody">
+                                \${renderTableRows(data, columns)}
+                            </tbody>
+                        </table>
+                    </div>
+                \`;
+
+                tableContent.innerHTML = tableGridHtml;
+            }
             updatePagination();
+            updateSortIndicators();
         }
         
         function renderTableRows(data, columns) {
@@ -1358,23 +1630,17 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         }
         
         function filterTableData(searchTerm) {
-            searchTerm = searchTerm.toLowerCase();
-            if (!searchTerm) {
-                filteredData = [...currentData];
-            } else {
-                filteredData = currentData.filter(row => {
-                    return Object.values(row).some(val => {
-                        const strVal = String(val).toLowerCase();
-                        return strVal.includes(searchTerm);
-                    });
-                });
-            }
+            searchTerm = searchTerm.trim();
+            currentSearchTerm = searchTerm;
             
-            const columns = Object.keys(currentData[0]);
-            const tbody = document.getElementById('tableBody');
-            if (tbody) {
-                tbody.innerHTML = renderTableRows(filteredData, columns);
+            if (searchDebounceTimeout) {
+                clearTimeout(searchDebounceTimeout);
             }
+
+            searchDebounceTimeout = setTimeout(() => {
+                currentPage = 1; // Reset to page 1 for new search
+                loadCurrentTable();
+            }, 300);
         }
         
         function sortTable(column) {
@@ -1385,7 +1651,17 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 sortDirection = 'asc';
             }
             
-            filteredData.sort((a, b) => {
+            if (isQueryView) {
+                clientSideSort(column);
+                updateSortIndicators();
+            } else {
+                // Server-side sorting
+                loadCurrentTable();
+            }
+        }
+
+        function clientSideSort(column) {
+             filteredData.sort((a, b) => {
                 let valA = a[column];
                 let valB = b[column];
                 
@@ -1411,15 +1687,27 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
             if (tbody) {
                 tbody.innerHTML = renderTableRows(filteredData, columns);
             }
+        }
+
+        function updateSortIndicators() {
+            if (!currentData || currentData.length === 0) return;
+            const columns = Object.keys(currentData[0]);
             
-            document.querySelectorAll('th').forEach(th => th.classList.remove('sorted'));
-            const headers = document.querySelectorAll('th');
-            const colIndex = columns.indexOf(column);
-            if (colIndex >= 0 && headers[colIndex]) {
-                headers[colIndex].classList.add('sorted');
-                const indicator = headers[colIndex].querySelector('.sort-indicator');
-                if (indicator) {
-                    indicator.textContent = sortDirection === 'asc' ? ' ▲' : ' ▼';
+            document.querySelectorAll('th').forEach(th => {
+                th.classList.remove('sorted');
+                const indicator = th.querySelector('.sort-indicator');
+                if (indicator) indicator.textContent = '';
+            });
+            
+            if (sortColumn) {
+                const colIndex = columns.indexOf(sortColumn);
+                const headers = document.querySelectorAll('th');
+                if (colIndex >= 0 && headers[colIndex]) {
+                    headers[colIndex].classList.add('sorted');
+                    const indicator = headers[colIndex].querySelector('.sort-indicator');
+                    if (indicator) {
+                        indicator.textContent = sortDirection === 'asc' ? ' ▲' : ' ▼';
+                    }
                 }
             }
         }
@@ -1478,12 +1766,24 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         function loadCurrentTable() {
             if (!currentTable) return;
             
-            vscode.postMessage({
-                type: 'getTableData',
-                tableName: currentTable,
-                page: currentPage,
-                pageSize: pageSize
-            });
+            if (currentSearchTerm) {
+                vscode.postMessage({
+                    type: 'searchTable',
+                    tableName: currentTable,
+                    searchTerm: currentSearchTerm,
+                    page: currentPage,
+                    pageSize: pageSize
+                });
+            } else {
+                vscode.postMessage({
+                    type: 'getTableData',
+                    tableName: currentTable,
+                    page: currentPage,
+                    pageSize: pageSize,
+                    sortCol: sortColumn,
+                    sortDir: sortDirection
+                });
+            }
         }
         
         // --- Query Panel ---
@@ -1531,6 +1831,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 return;
             }
             
+            isQueryView = true;
             const data = message.data;
             const tableContent = document.getElementById('tableContent');
             
@@ -1576,7 +1877,10 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
         
         // --- Export Functions ---
         function exportToCSV() {
-            if (!currentData || currentData.length === 0) return;
+            if (!currentData || currentData.length === 0) {
+                showNotification('No data to export', 'warning');
+                return;
+            }
             
             const columns = Object.keys(currentData[0]);
             let csv = columns.map(col => \`"\${col}"\`).join(',') + '\\n';
@@ -1590,26 +1894,27 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 csv += values.join(',') + '\\n';
             });
             
-            downloadFile(csv, \`\${currentTable || 'query_result'}.csv\`, 'text/csv');
+            vscode.postMessage({
+                type: 'saveFile',
+                content: csv,
+                filename: \`\${currentTable || 'query_result'}.csv\`,
+                fileType: 'csv'
+            });
         }
         
         function exportToJSON() {
-            if (!currentData || currentData.length === 0) return;
+            if (!currentData || currentData.length === 0) {
+                showNotification('No data to export', 'warning');
+                return;
+            }
             
             const json = JSON.stringify(currentData, null, 2);
-            downloadFile(json, \`\${currentTable || 'query_result'}.json\`, 'application/json');
-        }
-        
-        function downloadFile(content, filename, mimeType) {
-            const blob = new Blob([content], { type: mimeType });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            vscode.postMessage({
+                type: 'saveFile',
+                content: json,
+                filename: \`\${currentTable || 'query_result'}.json\`,
+                fileType: 'json'
+            });
         }
         
         // --- Cell Preview Modal ---
@@ -1685,7 +1990,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
                 showNotification('No table selected', 'warning');
                 return;
             }
-            loadTable(currentTable);
+            loadCurrentTable();
             showNotification('Table refreshed successfully', 'success');
         }
 
@@ -1729,26 +2034,23 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider {
 
         function showNotification(message, type = 'info') {
             const notification = document.createElement('div');
-            notification.className = \`notification notification-\${type}\`;
-            notification.textContent = message;
-            notification.style.cssText = \`
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 12px 20px;
-                background: \${type === 'success' ? '#107c10' : type === 'error' ? '#e81123' : '#0078d4'};
-                color: white;
-                border-radius: 4px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-                z-index: 10000;
-                animation: slideIn 0.3s ease-out;
-            \`;
+            notification.className = \`notification notification-\${type} show\`;
+            
+            let icon = 'fa-info-circle';
+            if (type === 'success') icon = 'fa-check-circle';
+            if (type === 'warning') icon = 'fa-exclamation-triangle';
+            if (type === 'error') icon = 'fa-exclamation-circle';
+            
+            notification.innerHTML = \`<i class="fas \${icon}"></i> <span>\${escapeHtml(message)}</span>\`;
             
             document.body.appendChild(notification);
             
             setTimeout(() => {
-                notification.style.animation = 'slideOut 0.3s ease-out';
-                setTimeout(() => notification.remove(), 300);
+                notification.classList.remove('show');
+                notification.classList.add('hide');
+                notification.addEventListener('animationend', () => {
+                    notification.remove();
+                });
             }, 3000);
         }
     </script>
