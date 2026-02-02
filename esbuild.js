@@ -39,6 +39,25 @@ async function main() {
 		console.log('Copied sql-wasm.wasm to dist folder');
 	}
 
+    // Copy webview folder to dist
+    const webviewSrc = path.join(__dirname, 'src', 'webview');
+    const webviewDest = path.join(__dirname, 'dist', 'webview');
+    
+    if (!fs.existsSync(webviewDest)) {
+        fs.mkdirSync(webviewDest, { recursive: true });
+    }
+    
+    if (fs.existsSync(webviewSrc)) {
+        fs.readdirSync(webviewSrc).forEach(file => {
+            const srcPath = path.join(webviewSrc, file);
+            const destPath = path.join(webviewDest, file);
+            if (fs.lstatSync(srcPath).isFile()) {
+                fs.copyFileSync(srcPath, destPath);
+            }
+        });
+        console.log('Copied webview files to dist folder');
+    }
+
 	const ctx = await esbuild.context({
 		entryPoints: [
 			'src/extension.ts'
