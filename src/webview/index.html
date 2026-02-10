@@ -261,15 +261,13 @@
         .sidebar ul {
             list-style: none;
             padding: 0; 
-            /* Adjusted margin to bring list closer to header */
-            margin: 5px 0 0 0; 
+            margin: 5px 0 0 0;
         }
         
         .sidebar ul li {
-            /* KEY FIX: Removed all vertical margin on the LI element */
-            margin-bottom: 0; 
-            border-radius: 0; 
-            overflow: visible; 
+            margin: 0;
+            padding: 0;
+            list-style: none;
         }
         
         .table-item-link {
@@ -279,11 +277,11 @@
             text-decoration: none;
             color: var(--dark);
             font-size: 13px;
-            padding: 10px 12px;
+            padding: 8px 12px;
             transition: var(--transition);
             cursor: pointer;
-            border-radius: 6px; 
-            margin: var(--item-spacing) var(--sidebar-padding) 0 var(--sidebar-padding);
+            border-radius: var(--border-radius-sm); 
+            margin: 2px var(--sidebar-padding);
         }
         
         .table-item-content {
@@ -370,7 +368,7 @@
             border-radius: var(--border-radius);
             padding: 15px;
             margin-bottom: 20px;
-            transition: var(--transition);
+            transition: padding 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
         
         .query-panel.collapsed {
@@ -400,13 +398,29 @@
         }
         
         .query-content {
-            margin-top: 12px;
-            display: none;
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            overflow: hidden;
+            transform: translateY(-10px) scale(0.98);
+            transition: 
+                max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.3s ease-in,
+                margin-top 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.4s ease-in;
         }
         
         .query-panel:not(.collapsed) .query-content {
             display: block;
-            animation: fadeIn 0.3s ease-out;
+            margin-top: 12px;
+            max-height: 500px;
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            transition: 
+                max-height 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+                opacity 0.4s ease-out 0.1s,
+                margin-top 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
         
         .query-input {
@@ -929,48 +943,82 @@
             background: var(--light);
         }
 
-        .chart-controls {
+        .chart-settings-container {
+            display: flex;
+            gap: 20px;
+            padding: 15px;
+            background: var(--vscode-input-background);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+            overflow-x: auto;
+        }
+
+        .chart-setting-section {
+            flex: 1;
+            min-width: 250px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .setting-section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin: 0;
             display: flex;
             align-items: center;
-            gap: 15px;
-            padding: 12px;
-            background: var(--vscode-input-background);
-            border-radius: 6px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-            border: 1px solid var(--border-color);
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+
+        .chart-setting-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
         }
 
         .chart-control-group {
             display: flex;
-            align-items: center;
-            gap: 8px;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .chart-control-group label {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--dark);
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--gray);
         }
 
         .chart-select {
-            padding: 6px 10px;
+            padding: 6px 8px;
             background: var(--light);
             color: var(--dark);
             border: 1px solid var(--border-color);
             border-radius: var(--border-radius-sm);
             font-size: 12px;
-            min-width: 120px;
+            width: 100%;
+            transition: var(--transition);
+        }
+
+        .chart-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
         }
 
         .chart-canvas-container {
             flex: 1;
             position: relative;
             min-height: 0;
-            padding: 10px;
+            padding: 20px;
             display: flex; /* Center the chart */
             justify-content: center;
             align-items: center;
+            background: var(--light);
+            overflow: hidden;
         }
 
         /* Ensure chart doesn't overflow */
@@ -979,8 +1027,47 @@
             max-height: 100%;
         }
 
+        .chart-footer-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: var(--vscode-input-background);
+            border-top: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .pagination-wrapper, .limit-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .pagination-wrapper button {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: var(--transition);
+        }
+
+        .pagination-wrapper button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .pagination-wrapper button:not(:disabled):hover {
+            background: var(--vscode-button-hoverBackground);
+        }
+
         .chart-warning {
-            padding: 10px;
+            padding: 6px 12px;
             color: var(--warning-color);
             background: rgba(255, 140, 0, 0.1);
             border: 1px solid rgba(255, 140, 0, 0.3);
@@ -1077,59 +1164,63 @@
 
             <!-- Chart Panel -->
             <div class="chart-panel" id="chartPanel" style="display:none;">
-                <div class="chart-controls">
-                    <div class="chart-control-group">
-                        <label>Type:</label>
-                        <select id="chartType" class="chart-select" onchange="ChartManager.updateChart()">
-                            <option value="bar">Bar</option>
-                            <option value="line">Line</option>
-                            <option value="pie">Pie</option>
-                            <option value="doughnut">Doughnut</option>
-                            <option value="scatter">Scatter</option>
-                        </select>
+                <div class="chart-settings-container">
+                    <!-- Data Configuration Section -->
+                    <div class="chart-setting-section">
+                        <h4 class="setting-section-title"><i class="fas fa-database"></i> Data Source</h4>
+                        <div class="chart-setting-grid">
+                            <div class="chart-control-group">
+                                <label>X Axis</label>
+                                <select id="chartXAxis" class="chart-select" onchange="ChartManager.updateChart()"></select>
+                            </div>
+                            <div class="chart-control-group">
+                                <label>Y Axis</label>
+                                <select id="chartYAxis" class="chart-select" onchange="ChartManager.updateChart()"></select>
+                            </div>
+                             <div class="chart-control-group">
+                                <label>Mode</label>
+                                 <select id="chartMode" class="chart-select" onchange="ChartManager.updateChart()">
+                                    <option value="raw">Raw Data</option>
+                                    <option value="aggregate">Aggregate (Sum)</option>
+                                 </select>
+                            </div>
+                        </div>
                     </div>
-                    <div class="chart-control-group">
-                        <label>X Axis (Label):</label>
-                        <select id="chartXAxis" class="chart-select" onchange="ChartManager.updateChart()"></select>
-                    </div>
-                    <div class="chart-control-group">
-                        <label>Y Axis (Value):</label>
-                        <select id="chartYAxis" class="chart-select" onchange="ChartManager.updateChart()"></select>
-                    </div>
-                     <div class="chart-control-group">
-                        <label>Mode:</label>
-                         <select id="chartMode" class="chart-select" onchange="ChartManager.updateChart()">
-                            <option value="raw">Raw Data</option>
-                            <option value="aggregate">Aggregate (Sum)</option>
-                         </select>
-                    </div>
-                    <div class="chart-control-group">
-                        <label>Limit:</label>
-                        <select id="chartLimit" class="chart-select" onchange="ChartManager.changeLimit()">
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                            <option value="200">200</option>
-                            <option value="500">500</option>
-                            <option value="1000">1000</option>
-                        </select>
-                    </div>
-                    <div class="chart-control-group">
-                        <label>Color:</label>
-                        <select id="chartTheme" class="chart-select" onchange="ChartManager.updateChart()">
-                            <option value="default">Default (Blue)</option>
-                            <option value="fun">Static RGB</option>
-                            <option value="ocean">Ocean</option>
-                            <option value="warm">Warm</option>
-                            <option value="vscode">VS Code</option>
-                        </select>
-                    </div>
-                    <button class="action-button secondary" onclick="ChartManager.saveImage()" title="Save Chart as Image">
-                        <i class="fas fa-camera"></i>
-                    </button>
-                    <div id="chartWarning" class="chart-warning" style="display:none;">
-                         <i class="fas fa-exclamation-triangle"></i> showing top 50 rows
+   
+                    <!-- Visual Configuration Section -->
+                    <div class="chart-setting-section">
+                        <h4 class="setting-section-title"><i class="fas fa-paint-brush"></i> Appearance</h4>
+                        <div class="chart-setting-grid">
+                            <div class="chart-control-group">
+                                <label>Type</label>
+                                <select id="chartType" class="chart-select" onchange="ChartManager.updateChart()">
+                                    <option value="bar">Bar</option>
+                                    <option value="line">Line</option>
+                                    <option value="pie">Pie</option>
+                                    <option value="doughnut">Doughnut</option>
+                                    <option value="scatter">Scatter</option>
+                                </select>
+                            </div>
+                            <div class="chart-control-group">
+                                <label>Theme</label>
+                                <select id="chartTheme" class="chart-select" onchange="ChartManager.updateChart()">
+                                    <option value="default">Default (Blue)</option>
+                                    <option value="fun">Static RGB</option>
+                                    <option value="ocean">Ocean</option>
+                                    <option value="warm">Warm</option>
+                                    <option value="vscode">VS Code</option>
+                                </select>
+                            </div>
+                             <div class="chart-control-group">
+                                <label>&nbsp;</label>
+                                <button class="action-button secondary" onclick="ChartManager.saveImage()" title="Save Chart as Image" style="width:100%">
+                                    <i class="fas fa-camera"></i> Save Image
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
+   
                 <div class="chart-canvas-container">
                     <canvas id="dataChart"></canvas>
                     <div id="chartPlaceholder" class="placeholder" style="display:none;">
@@ -1137,7 +1228,28 @@
                         <p>No suitable numeric data found to visualize.</p>
                     </div>
                 </div>
-            </div>
+                
+                <!-- Chart Footer with Pagination -->
+                <div class="chart-footer-controls">
+                   <div class="pagination-wrapper">
+                       <button id="chartPrevBtn" onclick="previousPage()" title="Previous Page"><i class="fas fa-chevron-left"></i></button>
+                       <span id="chartPageInfo" class="page-info">Page 1 of 1</span>
+                       <button id="chartNextBtn" onclick="nextPage()" title="Next Page"><i class="fas fa-chevron-right"></i></button>
+                   </div>
+                   
+                   <div class="limit-wrapper">
+                       <label>Max Points / Page:</label>
+                       <select id="chartLimit" class="chart-select" style="width: 80px;" onchange="ChartManager.changeLimit()">
+                           <option value="50">50</option>
+                           <option value="100">100</option>
+                           <option value="200">200</option>
+                           <option value="500">500</option>
+                           <option value="1000">1000</option>
+                       </select>
+                   </div>
+                    <div id="chartWarning" class="chart-warning" style="display:none;"></div>
+                </div>
+           </div>
         </div>
     </div>
 
@@ -1269,6 +1381,20 @@
                 // Reload data from extension to get the full N rows
                 loadCurrentTable();
             },
+
+            updatePaginationUI() {
+                if (!this.isActive) return;
+                
+                const prevBtn = document.getElementById('chartPrevBtn');
+                const nextBtn = document.getElementById('chartNextBtn');
+                const info = document.getElementById('chartPageInfo');
+                
+                if (prevBtn && nextBtn && info) {
+                    prevBtn.disabled = currentPage <= 1;
+                    nextBtn.disabled = currentPage >= totalPages;
+                    info.textContent = `Page ${currentPage} of ${totalPages} (${formatNumber(totalRows)} total)`;
+                }
+            },
             
             updateData() {
                 if (!this.isActive) return;
@@ -1277,6 +1403,7 @@
                 const data = filteredData; 
                 if (!data || data.length === 0) {
                      this.showPlaceholder('No data available to chart.');
+                     this.updatePaginationUI();
                      return;
                 }
 
@@ -1319,6 +1446,7 @@
                 
                 this.hidePlaceholder();
                 this.updateChart();
+                this.updatePaginationUI();
             },
 
             populateSelect(id, options, selected) {
@@ -1498,17 +1626,11 @@
                 const ph = document.getElementById('chartPlaceholder');
                 ph.style.display = 'flex';
                 ph.querySelector('p').textContent = msg;
-                // Don't hide controls entirely, just the chart, so user can maybe pick diff columns? 
-                // But if no numeric cols, controls useless.
-                if(msg.includes('No numeric')) {
-                    document.querySelector('.chart-controls').style.display = 'none';
-                }
             },
 
             hidePlaceholder() {
                 document.getElementById('dataChart').style.display = 'block';
                 document.getElementById('chartPlaceholder').style.display = 'none';
-                document.querySelector('.chart-controls').style.display = 'flex';
             },
             
             toggleWarning(show, msg) {
@@ -1914,6 +2036,12 @@
             const pagination = document.getElementById('pagination');
             const pageInfo = document.getElementById('pageInfo');
             
+            // Fix: Do not show pagination if in Chart Mode to avoid UI overlap
+            if (ChartManager.isActive) {
+                pagination.style.display = 'none';
+                return;
+            }
+
             if (totalPages <= 1) {
                 pagination.style.display = 'none';
                 return;
