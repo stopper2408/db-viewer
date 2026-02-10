@@ -183,6 +183,19 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider<Sql
         }
     }
 
+    private processDataForWebview(data: any[]): any[] {
+        return data.map(row => {
+            const newRow: any = { ...row };
+            for (const key in newRow) {
+                const value = newRow[key];
+                if (value instanceof Uint8Array) {
+                    newRow[key] = `<BLOB: ${value.length} bytes>`;
+                }
+            }
+            return newRow;
+        });
+    }
+
     private async loadTableData(
         document: SqliteDocument,
         tableName: string,
@@ -223,7 +236,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider<Sql
             console.log(`[DB Viewer] Table ${tableName}: ${rowCount} total rows, ${schema.length} columns, page ${p}/${totalPages}`);
 
             // Convert sql.js result format to JSON objects
-            const data: TableRow[] = [];
+            let data: TableRow[] = [];
             if (dataResult.length > 0) {
                 const columns = dataResult[0].columns;
                 const values = dataResult[0].values;
@@ -236,6 +249,9 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider<Sql
                     data.push(obj);
                 });
             }
+            
+            // Process BLOBs
+            data = this.processDataForWebview(data);
 
             webview.postMessage({
                 type: 'tableData',
@@ -290,7 +306,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider<Sql
             console.log(`[DB Viewer] Search found ${rowCount} rows, page ${p}/${totalPages}`);
 
             // Convert sql.js result format to JSON objects
-            const data: TableRow[] = [];
+            let data: TableRow[] = [];
             if (dataResult.length > 0) {
                 const columns = dataResult[0].columns;
                 const values = dataResult[0].values;
@@ -303,6 +319,9 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider<Sql
                     data.push(obj);
                 });
             }
+            
+            // Process BLOBs
+            data = this.processDataForWebview(data);
 
             webview.postMessage({
                 type: 'tableData',
@@ -333,7 +352,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider<Sql
             const result = db.exec(query);
 
             // Convert results to JSON format
-            const data: TableRow[] = [];
+            let data: TableRow[] = [];
             if (result.length > 0) {
                 const columns = result[0].columns;
                 const values = result[0].values;
@@ -346,6 +365,9 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider<Sql
                     data.push(obj);
                 });
             }
+            
+            // Process BLOBs
+            data = this.processDataForWebview(data);
 
             webview.postMessage({
                 type: 'queryResult',

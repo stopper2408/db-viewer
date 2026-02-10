@@ -2,7 +2,7 @@
 
 **The Ultimate SQLite Database Explorer for VS Code**
 
-[![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)](https://marketplace.visualstudio.com/items?itemName=community-dev.db-viewer-enhanced)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://marketplace.visualstudio.com/items?itemName=community-dev.db-viewer-enhanced)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![VS Code](https://img.shields.io/badge/Built%20for-VS%20Code-007ACC.svg)](https://code.visualstudio.com/)
 

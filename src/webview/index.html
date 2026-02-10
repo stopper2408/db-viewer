@@ -3,9 +3,11 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Database Viewer</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* Base Variables and Reset for VS Code Integration */
         :root {
@@ -870,6 +872,80 @@
             font-weight: 600;
             text-transform: uppercase;
         }
+
+        /* --- Chart View --- */
+        .chart-panel {
+            flex: 1;
+            /* Same styling as data-panel effectively */
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            animation: fadeIn 0.4s ease-out;
+            background: var(--light);
+        }
+
+        .chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 12px;
+            background: var(--vscode-input-background);
+            border-radius: 6px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            border: 1px solid var(--border-color);
+        }
+
+        .chart-control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chart-control-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .chart-select {
+            padding: 6px 10px;
+            background: var(--light);
+            color: var(--dark);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            font-size: 12px;
+            min-width: 120px;
+        }
+
+        .chart-canvas-container {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+            padding: 10px;
+            display: flex; /* Center the chart */
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Ensure chart doesn't overflow */
+        .chart-canvas-container canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .chart-warning {
+            padding: 10px;
+            color: var(--warning-color);
+            background: rgba(255, 140, 0, 0.1);
+            border: 1px solid rgba(255, 140, 0, 0.3);
+            border-radius: 4px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
     </style>
 </head>
 
@@ -906,6 +982,9 @@
                     </button>
                     <button id="copyAllButton" class="action-button secondary" style="display:none;" onclick="copyAllData()">
                         <i class="fas fa-copy"></i> Copy All
+                    </button>
+                    <button id="chartToggleButton" class="action-button secondary" style="display:none;" onclick="toggleChartView()">
+                        <i class="fas fa-chart-bar"></i> Chart
                     </button>
                 </div>
             </div>
@@ -951,6 +1030,70 @@
                     <option value="500">500 rows</option>
                 </select>
             </div>
+
+            <!-- Chart Panel -->
+            <div class="chart-panel" id="chartPanel" style="display:none;">
+                <div class="chart-controls">
+                    <div class="chart-control-group">
+                        <label>Type:</label>
+                        <select id="chartType" class="chart-select" onchange="ChartManager.updateChart()">
+                            <option value="bar">Bar</option>
+                            <option value="line">Line</option>
+                            <option value="pie">Pie</option>
+                            <option value="doughnut">Doughnut</option>
+                            <option value="scatter">Scatter</option>
+                        </select>
+                    </div>
+                    <div class="chart-control-group">
+                        <label>X Axis (Label):</label>
+                        <select id="chartXAxis" class="chart-select" onchange="ChartManager.updateChart()"></select>
+                    </div>
+                    <div class="chart-control-group">
+                        <label>Y Axis (Value):</label>
+                        <select id="chartYAxis" class="chart-select" onchange="ChartManager.updateChart()"></select>
+                    </div>
+                     <div class="chart-control-group">
+                        <label>Mode:</label>
+                         <select id="chartMode" class="chart-select" onchange="ChartManager.updateChart()">
+                            <option value="raw">Raw Data</option>
+                            <option value="aggregate">Aggregate (Sum)</option>
+                         </select>
+                    </div>
+                    <div class="chart-control-group">
+                        <label>Limit:</label>
+                        <select id="chartLimit" class="chart-select" onchange="ChartManager.changeLimit()">
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="200">200</option>
+                            <option value="500">500</option>
+                            <option value="1000">1000</option>
+                        </select>
+                    </div>
+                    <div class="chart-control-group">
+                        <label>Color:</label>
+                        <select id="chartTheme" class="chart-select" onchange="ChartManager.updateChart()">
+                            <option value="default">Default (Blue)</option>
+                            <option value="fun">Static RGB</option>
+                            <option value="ocean">Ocean</option>
+                            <option value="warm">Warm</option>
+                            <option value="vscode">VS Code</option>
+                        </select>
+                    </div>
+                    <button class="action-button secondary" onclick="ChartManager.saveImage()" title="Save Chart as Image">
+                        <i class="fas fa-camera"></i>
+                    </button>
+                    <div id="chartWarning" class="chart-warning" style="display:none;">
+                         <i class="fas fa-exclamation-triangle"></i> showing top 50 rows
+                    </div>
+                </div>
+                <div class="chart-canvas-container">
+                    <canvas id="dataChart"></canvas>
+                    <div id="chartPlaceholder" class="placeholder" style="display:none;">
+                        <i class="fas fa-chart-line" style="font-size: 48px; margin-bottom: 15px;"></i>
+                        <p>No suitable numeric data found to visualize.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -991,6 +1134,357 @@
         let isQueryView = false;
         let searchDebounceTimeout = null;
         const mainHeading = document.getElementById('mainHeading');
+
+        // --- Chart Themes ---
+        const ChartThemes = {
+            default: {
+                colors: ['#0078d4'], // Single sophisticated blue
+                border: null
+            },
+            fun: {
+                colors: ['#ff00ff', '#00ffff', '#ffff00', '#ff0000', '#00ff00', '#0000ff'], // Static RGB fun
+                border: '#ffffff'
+            },
+            ocean: {
+                colors: ['#0077be', '#0088cc', '#0099db', '#00aaeb', '#00bbfa'], // Sophisticated Ocean
+                border: null
+            },
+            warm: {
+                colors: ['#e74c3c', '#e67e22', '#f1c40f', '#d35400', '#c0392b'], // Sophisticated Warm
+                border: null
+            },
+            vscode: {
+                colors: [
+                    '#0078d4', '#00bcf2', '#107c10', '#5c2d91', '#b4009e', 
+                    '#e81123', '#d83b01', '#00188f', '#008272', '#a80000'
+                ],
+                border: null
+            }
+        };
+
+        // --- Chart Manager ---
+        const ChartManager = {
+            chart: null,
+            isActive: false,
+            savedTablePageSize: 100,
+            
+            init() {
+                // Initial setup if needed
+            },
+
+            toggle() {
+                this.isActive = !this.isActive;
+                const chartPanel = document.getElementById('chartPanel');
+                const tableContent = document.getElementById('tableContent');
+                const pagination = document.getElementById('pagination');
+                const btn = document.getElementById('chartToggleButton');
+                
+                if (this.isActive) {
+                    // Switch TO Chart Mode
+                    this.savedTablePageSize = pageSize; // Save user's table preference
+                    
+                    // Set data fetch size to match the Chart Limit selector
+                    const limitVal = parseInt(document.getElementById('chartLimit').value) || 50;
+                    pageSize = limitVal;
+                    
+                    chartPanel.style.display = 'flex';
+                    tableContent.style.display = 'none';
+                    pagination.style.display = 'none';
+                    btn.classList.add('active'); 
+                    btn.innerHTML = '<i class="fas fa-table"></i> Table';
+                    
+                    // Fetch new data chunk matching the limit
+                    // The chart will update automatically via displayTableData -> updateData
+                    loadCurrentTable(); 
+                } else {
+                    // Switch BACK to Table Mode
+                    pageSize = this.savedTablePageSize; // Restore user's table preference
+                    
+                    chartPanel.style.display = 'none';
+                    tableContent.style.display = 'flex';
+                    
+                    // Restore pagination visibility logic
+                    if (totalPages > 1) {
+                        pagination.style.display = 'flex';
+                    } else {
+                         pagination.style.display = 'none';
+                    }
+                    
+                    btn.classList.remove('active');
+                    btn.innerHTML = '<i class="fas fa-chart-bar"></i> Chart';
+                    
+                    // Fetch data again with original page size
+                    loadCurrentTable();
+                }
+            },
+
+            changeLimit() {
+                if (!this.isActive) return;
+                const limitVal = parseInt(document.getElementById('chartLimit').value) || 50;
+                pageSize = limitVal;
+                // Reload data from extension to get the full N rows
+                loadCurrentTable();
+            },
+            
+            updateData() {
+                if (!this.isActive) return;
+                
+                // Use filteredData so charts reflect current search
+                const data = filteredData; 
+                if (!data || data.length === 0) {
+                     this.showPlaceholder('No data available to chart.');
+                     return;
+                }
+
+                // Identify columns
+                const columns = Object.keys(data[0]);
+                const numericCols = [];
+                const stringCols = [];
+
+                // Analyze first 10 rows to guess type
+                columns.forEach(col => {
+                    let isNum = true;
+                    let hasValue = false;
+                    for(let i=0; i<Math.min(data.length, 10); i++) {
+                        const val = data[i][col];
+                        if (val !== null && val !== undefined && val !== '') {
+                            hasValue = true;
+                            if (typeof val !== 'number' && isNaN(Number(val))) {
+                                isNum = false;
+                                break;
+                            }
+                        }
+                    }
+                    // If all checked values are numbers (or column is empty but we default to string usually, 
+                    // but here strict numeric check)
+                    if (hasValue && isNum) numericCols.push(col);
+                    else stringCols.push(col);
+                });
+
+                // Fail-safe if no string cols, allow numeric as X
+                const xOptions = stringCols.length > 0 ? stringCols : columns;
+                // If no numeric, we can't chart (unless count, but let's stick to values)
+                if (numericCols.length === 0) {
+                    this.showPlaceholder('No numeric columns found to visualize.');
+                    return;
+                }
+
+                // Populate Selectors
+                this.populateSelect('chartXAxis', xOptions, xOptions[0]);
+                this.populateSelect('chartYAxis', numericCols, numericCols[0]);
+                
+                this.hidePlaceholder();
+                this.updateChart();
+            },
+
+            populateSelect(id, options, selected) {
+                const select = document.getElementById(id);
+                const currentVal = select.value;
+                const available = new Set(options);
+                
+                // If current selection is still valid, keep it. Else use 'selected' hint.
+                let nextVal = available.has(currentVal) ? currentVal : selected;
+                
+                select.innerHTML = '';
+                options.forEach(opt => {
+                    const optEl = document.createElement('option');
+                    optEl.value = opt;
+                    optEl.textContent = opt;
+                    if (opt === nextVal) optEl.selected = true;
+                    select.appendChild(optEl);
+                });
+                
+                select.value = nextVal;
+            },
+
+            updateChart() {
+                if (!this.isActive) return;
+
+                const xAxisCol = document.getElementById('chartXAxis').value;
+                const yAxisCol = document.getElementById('chartYAxis').value;
+                const type = document.getElementById('chartType').value;
+                const mode = document.getElementById('chartMode').value;
+                const limitVal = parseInt(document.getElementById('chartLimit').value) || 50;
+                const themeName = document.getElementById('chartTheme').value || 'default';
+                
+                let data = filteredData;
+                
+                if (!xAxisCol || !yAxisCol) return;
+
+                const MAX_POINTS = limitVal;
+                let chartLabels = [];
+                let chartValues = [];
+                let warningMsg = '';
+                
+                if (mode === 'aggregate') {
+                    // Group by X and Sum Y
+                    const map = new Map();
+                    // Limit source data processing for speed? No, 10k is fast in JS.
+                    data.forEach(row => {
+                        const xVal = row[xAxisCol] === null ? 'NULL' : String(row[xAxisCol]);
+                        const yVal = Number(row[yAxisCol]) || 0;
+                        map.set(xVal, (map.get(xVal) || 0) + yVal);
+                    });
+                    
+                    // Sort descending by value to show most significant
+                    const sorted = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+                    
+                    const displayData = sorted.slice(0, MAX_POINTS);
+                    chartLabels = displayData.map(d => d[0]);
+                    chartValues = displayData.map(d => d[1]);
+                    
+                    if (sorted.length > MAX_POINTS) {
+                        warningMsg = `Top ${MAX_POINTS} categories by sum`;
+                    }
+                } else {
+                    // Raw Mode
+                    if (data.length > MAX_POINTS) {
+                        warningMsg = `First ${MAX_POINTS} rows shown (of ${data.length})`;
+                    }
+                    
+                    const slice = data.slice(0, MAX_POINTS);
+                    chartLabels = slice.map(d => d[xAxisCol] === null ? '' : String(d[xAxisCol]));
+                    chartValues = slice.map(d => Number(d[yAxisCol]) || 0);
+                }
+                
+                this.toggleWarning(!!warningMsg, warningMsg);
+                this.render(type, chartLabels, chartValues, xAxisCol, yAxisCol, themeName);
+            },
+
+            render(type, labels, data, xLabel, yLabel, themeName) {
+                 const ctx = document.getElementById('dataChart').getContext('2d');
+                 
+                 // Destroy previous instance
+                 if (this.chart) {
+                     this.chart.destroy();
+                 }
+
+                 if (typeof Chart === 'undefined') {
+                     this.showPlaceholder('Could not load Chart.js library. Please check your internet connection.');
+                     return;
+                 }
+
+                 // Theme Logic
+                 const theme = ChartThemes[themeName] || ChartThemes.default;
+                 
+                 const getColors = (count) => {
+                    const bgColors = [];
+                    const borderColors = [];
+                    for(let i=0; i<count; i++) {
+                        const col = theme.colors[i % theme.colors.length];
+                        bgColors.push(col);
+                        // If specific border color defined in theme, use it. Otherwise darken logic or same color.
+                        if (theme.border) {
+                            borderColors.push(theme.border);
+                        } else {
+                            // Simple logic: if transparent desired, maybe modify here. 
+                            // But usually chartjs likes matching borders or slightly darker.
+                            // For simplicity, re-use color or assume solid.
+                            borderColors.push(col);
+                        }
+                    }
+                    return { bg: bgColors, border: borderColors };
+                 };
+
+                 const { bg: colors, border: borderColors } = getColors(labels.length);
+
+                 const isLine = type === 'line' || type === 'scatter';
+                 
+                 // Specific line chart styling override to single color usually, or allow multi-colored segments?
+                 // Standard chart.js line charts usually use one color for the whole line.
+                 // We will pick the first color of the theme for the line.
+                 const lineMainColor = theme.colors[0];
+
+                 const config = {
+                     type: type,
+                     data: {
+                         labels: labels,
+                         datasets: [{
+                             label: yLabel,
+                             data: data,
+                             backgroundColor: isLine ? `${lineMainColor}33` : colors, // 33 for ~20% opacity hex
+                             borderColor: isLine ? lineMainColor : borderColors,
+                             borderWidth: 1,
+                             fill: isLine,
+                             pointBackgroundColor: isLine ? colors : undefined 
+                         }]
+                     },
+                     options: {
+                         responsive: true,
+                         maintainAspectRatio: false,
+                         animation: {
+                             duration: 400
+                         },
+                         plugins: {
+                             title: {
+                                display: true,
+                                text: `${yLabel} by ${xLabel}`,
+                                color: getComputedStyle(document.body).getPropertyValue('--vscode-foreground')
+                             },
+                             legend: {
+                                 display: type === 'pie' || type === 'doughnut',
+                                 labels: {
+                                     color: getComputedStyle(document.body).getPropertyValue('--vscode-foreground')
+                                 }
+                             }
+                         },
+                         scales: (type === 'pie' || type === 'doughnut') ? {} : {
+                             x: {
+                                 ticks: { color: getComputedStyle(document.body).getPropertyValue('--vscode-descriptionForeground') },
+                                 grid: { color: getComputedStyle(document.body).getPropertyValue('--vscode-panel-border') }
+                             },
+                             y: {
+                                 beginAtZero: true,
+                                 ticks: { color: getComputedStyle(document.body).getPropertyValue('--vscode-descriptionForeground') },
+                                 grid: { color: getComputedStyle(document.body).getPropertyValue('--vscode-panel-border') }
+                             }
+                         }
+                     }
+                 };
+                 
+                 this.chart = new Chart(ctx, config);
+            },
+            
+            showPlaceholder(msg) {
+                if (this.chart) {
+                    this.chart.destroy();
+                    this.chart = null;
+                }
+                document.getElementById('dataChart').style.display = 'none';
+                const ph = document.getElementById('chartPlaceholder');
+                ph.style.display = 'flex';
+                ph.querySelector('p').textContent = msg;
+                // Don't hide controls entirely, just the chart, so user can maybe pick diff columns? 
+                // But if no numeric cols, controls useless.
+                if(msg.includes('No numeric')) {
+                    document.querySelector('.chart-controls').style.display = 'none';
+                }
+            },
+
+            hidePlaceholder() {
+                document.getElementById('dataChart').style.display = 'block';
+                document.getElementById('chartPlaceholder').style.display = 'none';
+                document.querySelector('.chart-controls').style.display = 'flex';
+            },
+            
+            toggleWarning(show, msg) {
+                const w = document.getElementById('chartWarning');
+                w.style.display = show ? 'flex' : 'none';
+                if(msg) w.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${msg}`;
+            },
+
+            saveImage() {
+                if (!this.chart) return;
+                const link = document.createElement('a');
+                link.download = `chart_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.png`;
+                link.href = this.chart.toBase64Image();
+                link.click();
+            }
+        };
+
+        function toggleChartView() {
+            ChartManager.toggle();
+        }
 
         // --- Message Handling from Extension ---
         window.addEventListener('message', event => {
@@ -1135,6 +1629,7 @@
             document.getElementById('viewSchemaButton').style.display = 'none';
             document.getElementById('exportCsvButton').style.display = 'none';
             document.getElementById('exportJsonButton').style.display = 'none';
+            document.getElementById('chartToggleButton').style.display = 'none';
             
             mainHeading.textContent = escapeHtml(tableName);
             mainHeading.classList.add('table-name-heading'); 
@@ -1164,6 +1659,11 @@
             document.getElementById('exportCsvButton').style.display = 'flex';
             document.getElementById('exportJsonButton').style.display = 'flex';
             document.getElementById('copyAllButton').style.display = 'flex';
+            document.getElementById('chartToggleButton').style.display = 'flex';
+
+            if (ChartManager.isActive) {
+                ChartManager.updateData();
+            }
             
             if (data.length === 0) {
                 let emptyMessage = rowCount > 0 
@@ -1472,8 +1972,12 @@
             const data = message.data;
             const tableContent = document.getElementById('tableContent');
             
+            // Allow charting for query results too
+            document.getElementById('chartToggleButton').style.display = 'flex';
+
             if (!data || data.length === 0) {
                 tableContent.innerHTML = '<div class="placeholder"><p>Query executed successfully. No results returned.</p></div>';
+                if (ChartManager.isActive) ChartManager.updateData(); // Will show "No data"
                 return;
             }
             
@@ -1482,6 +1986,11 @@
             
             currentData = data;
             filteredData = [...data];
+
+            if (ChartManager.isActive) {
+                ChartManager.updateData();
+            }
+
             const columns = Object.keys(data[0]);
             
             const tableGridHtml = `
@@ -1607,7 +2116,12 @@
         // --- Utility Functions ---
         function formatValue(value) {
             if (value === null || value === undefined) { return 'NULL'; }
-            if (typeof value === 'object') { try { return JSON.stringify(value); } catch { return '[Object]'; } }
+            if (typeof value === 'object') { 
+                try { 
+                    if (Array.isArray(value)) return `[Array(${value.length})]`;
+                    return JSON.stringify(value); 
+                } catch { return '[Object]'; } 
+            }
             return String(value);
         }
 
