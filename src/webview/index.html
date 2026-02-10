@@ -88,6 +88,30 @@
             to { transform: translateX(50px); opacity: 0; }
         }
 
+        /* Edit Mode Styles */
+        .cell-edit-input {
+            width: 100%;
+            height: 100%;
+            min-height: 24px;
+            border: 2px solid var(--primary-color);
+            outline: none;
+            padding: 4px;
+            font-family: inherit;
+            font-size: inherit;
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            box-sizing: border-box;
+            display: block;
+        }
+
+        td.editing {
+            padding: 0 !important;
+        }
+
+        td.editing::after {
+            display: none !important;
+        }
+
         /* Custom Scrollbar */
         ::-webkit-scrollbar {
             width: 10px;
@@ -770,6 +794,26 @@
             color: var(--dark);
             font-size: 13px;
             line-height: 1.6;
+        }
+
+        .cell-edit-input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            outline: 2px solid var(--primary-color);
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            font-family: inherit;
+            font-size: 13px;
+            padding: 12px 16px; /* Match td padding */
+            margin: 0;
+            box-sizing: border-box;
+            display: block;
+            border-radius: 0;
+        }
+        
+        td.editing {
+            padding: 0 !important;
         }
         
         .placeholder {
@@ -1514,6 +1558,12 @@
                 case 'error':
                     showError(message.message);
                     break;
+                case 'updateSuccess':
+                    handleUpdateSuccess(message);
+                    break;
+                case 'updateError':
+                    handleUpdateError(message);
+                    break;
             }
         });
 
@@ -1690,7 +1740,7 @@
                 return;
             }
 
-            const columns = Object.keys(data[0]);
+            const columns = Object.keys(data[0]).filter(k => k !== '__rowid__');
 
             // Check if table structure already exists to avoid re-rendering controls
             if (document.getElementById('dataTable')) {
@@ -1744,7 +1794,7 @@
         
         function renderTableRows(data, columns) {
             return data.map(row => `
-                <tr>
+                <tr data-rowid="${row.__rowid__}">
                     ${columns.map(col => {
                         const rawValue = row[col];
                         const value = formatValue(rawValue);
@@ -1760,7 +1810,17 @@
                             dataType = 'object';
                         }
                         
-                        return `<td data-value="${value}" data-type="${dataType}" onclick="copyCellValue(this)" title="Click to copy: ${escapeHtml(value)}">${escapeHtml(value)}</td>`;
+                        // row.__rowid__ is the safe alias we're using
+                        const rowId = row.__rowid__;
+                        // Avoid making rowid column itself editable (if it appears), or if rowId is missing
+                        const isEditable = (col !== 'rowid' && col !== '__rowid__' && rowId !== undefined);
+                        
+                        return `<td 
+                            data-col="${escapeHtml(col)}" 
+                            data-rowid="${rowId || ''}"
+                            data-type="${dataType}"
+                            class="${isEditable ? 'editable-cell' : ''}"
+                            onclick="handleCellClick(this, '${escapeHtml(col)}', ${rowId})">${escapeHtml(value)}</td>`;
                     }).join('')}
                 </tr>
             `).join('');
@@ -1819,7 +1879,7 @@
                 }
             });
             
-            const columns = Object.keys(currentData[0]);
+            const columns = Object.keys(currentData[0]).filter(k => k !== '__rowid__');
             const tbody = document.getElementById('tableBody');
             if (tbody) {
                 tbody.innerHTML = renderTableRows(filteredData, columns);
@@ -1828,7 +1888,7 @@
 
         function updateSortIndicators() {
             if (!currentData || currentData.length === 0) return;
-            const columns = Object.keys(currentData[0]);
+            const columns = Object.keys(currentData[0]).filter(k => k !== '__rowid__');
             
             document.querySelectorAll('th').forEach(th => {
                 th.classList.remove('sorted');
@@ -2149,12 +2209,165 @@
             showNotification('Table refreshed successfully', 'success');
         }
 
+        let clickTimeout = null;
+        let lastClickedCell = null;
+
+        function handleCellClick(cell, colName, rowId) {
+            // Disable copy/click actions while editing
+            if (cell.classList.contains('editing') || cell.querySelector('.cell-edit-input')) {
+                return;
+            }
+
+            // Check for missing rowId explicitly to warn user
+            if (rowId === undefined || rowId === null) {
+                if (colName !== 'rowid') {
+                     // Only warn once per session/view to avoid spam, or use a specific visual indicator
+                     // But for now, just copy and maybe log.
+                     // Actually, if rowId is missing, double click is impossible.
+                     console.warn('Edit mode disabled: Missing rowid. Please reload the extension/table.');
+                     
+                     // If it's a double-click attempt (heuristic), warn the user
+                     if (clickTimeout && lastClickedCell === cell) {
+                         clearTimeout(clickTimeout);
+                         clickTimeout = null;
+                         showNotification('Edit disabled: Reload extension to enable (missing rowid)', 'warning');
+                         return;
+                     }
+                }
+                
+                // Fallback to copy logic (with delay for consistency, though double click won't work)
+                // We reuse the delay logic so single clicks feel the same
+            }
+
+            // If col is rowid, copy only
+            if (colName === 'rowid') {
+                copyCellValue(cell);
+                return;
+            }
+
+            if (clickTimeout && lastClickedCell === cell) {
+                // Double click: Edit
+                clearTimeout(clickTimeout);
+                clickTimeout = null;
+                lastClickedCell = null;
+                
+                if (rowId !== undefined && rowId !== null) {
+                    enterEditMode(cell, rowId, colName);
+                } else {
+                     showNotification('Edit disabled: Missing rowid', 'warning');
+                }
+            } else {
+                // First click: Copy delayed
+                if (clickTimeout) {
+                    clearTimeout(clickTimeout);
+                    clickTimeout = null;
+                }
+                
+                lastClickedCell = cell;
+                clickTimeout = setTimeout(() => {
+                    copyCellValue(cell);
+                    clickTimeout = null;
+                    lastClickedCell = null;
+                }, 200); // reduced to 200ms for snappier feel
+            }
+        }
+
+        function enterEditMode(cell, rowId, colName) {
+            if (cell.classList.contains('editing')) return;
+
+            const originalValue = cell.textContent;
+            
+            // Lock dimensions to prevent layout shift
+            const rect = cell.getBoundingClientRect();
+            cell.style.width = `${rect.width}px`;
+            cell.style.height = `${rect.height}px`;
+            
+            cell.classList.add('editing');
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'cell-edit-input';
+            input.value = originalValue === 'NULL' ? '' : originalValue;
+            
+            // Commit on Blur or Enter
+            const commit = () => {
+                const newValue = input.value;
+                // If value differs from displayed original (handling NULL case implies we might save empty string as empty string, not NULL)
+                // If user wants to set NULL, they might need a specific way, but for now empty string is empty string.
+                if (newValue !== (originalValue === 'NULL' ? '' : originalValue)) {
+                    saveCell(cell, rowId, colName, newValue);
+                } else {
+                    cancelEdit(cell, originalValue);
+                }
+            };
+            
+            input.onblur = commit;
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    input.blur(); // calls commit
+                } else if (e.key === 'Escape') {
+                    cancelEdit(cell, originalValue);
+                    e.stopPropagation();
+                }
+            };
+
+            cell.innerHTML = '';
+            cell.appendChild(input);
+            input.focus();
+        }
+
+        function cancelEdit(cell, originalValue) {
+            cell.classList.remove('editing');
+            cell.style.width = '';
+            cell.style.height = '';
+            cell.textContent = originalValue;
+        }
+
+        function saveCell(cell, rowId, colName, newValue) {
+            cell.classList.remove('editing');
+            cell.style.width = '';
+            cell.style.height = '';
+            cell.textContent = newValue;
+            
+            vscode.postMessage({
+                type: 'updateCell',
+                tableName: currentTable,
+                rowId: rowId,
+                column: colName,
+                value: newValue
+            });
+        }
+        
+        function handleUpdateSuccess(message) {
+            showNotification('Cell updated successfully', 'success');
+            const cell = document.querySelector(`tr[data-rowid="${message.rowId}"] td[data-col="${message.column}"]`);
+            if (cell) {
+                cell.classList.add('flash-success');
+                setTimeout(() => cell.classList.remove('flash-success'), 500);
+            }
+        }
+
+        function handleUpdateError(message) {
+            showNotification(`Update failed: ${message.error}`, 'error');
+            // Revert the cell changes by reloading the table is safest
+            refreshTable();
+        }
+
         function copyCellValue(element) {
-            const value = element.textContent;
+            // Use data-value if available for cleaner copy (e.g. no extra whitespace), otherwise textContent
+            // But checking previous implementation, it used textContent or value. 
+            // Let's stick to textContent but trim? Or just textContent as it might be what user sees.
+            /* 
+               Actually, data-value attribute was set in renderTableRows:
+               data-value="${value}"
+            */
+            const value = element.getAttribute('data-value') || element.textContent;
             const dataType = element.getAttribute('data-type');
             
             navigator.clipboard.writeText(value).then(() => {
-                showNotification(`Copied ${dataType || 'value'} to clipboard`, 'success');
+                showNotification('Copied to clipboard', 'success');
+                element.classList.add('flash-success');
+                setTimeout(() => element.classList.remove('flash-success'), 500);
             }).catch(err => {
                 console.error('Failed to copy:', err);
                 showNotification('Failed to copy to clipboard', 'error');

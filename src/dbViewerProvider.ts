@@ -106,9 +106,48 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider<Sql
                     case 'saveFile':
                         await this.saveFile(message.content, message.filename, message.fileType);
                         break;
+                    case 'updateCell':
+                        await this.updateCell(document, message.tableName, message.rowId, message.column, message.value, webviewPanel.webview);
+                        break;
                 }
             }
         );
+    }
+
+    private async updateCell(
+        document: SqliteDocument,
+        tableName: string,
+        rowId: number,
+        column: string,
+        value: string,
+        webview: vscode.Webview
+    ) {
+        try {
+            const db = document.db;
+            const sql = `UPDATE ${this.escapeId(tableName)} SET ${this.escapeId(column)} = ? WHERE rowid = ?`;
+            db.run(sql, [value, rowId]);
+            
+            // Export and Save
+            const data = db.export();
+            await vscode.workspace.fs.writeFile(document.uri, data);
+            
+            webview.postMessage({
+                type: 'updateSuccess',
+                tableName,
+                rowId,
+                column,
+                value
+            });
+        } catch (err) {
+            console.error('[DB Viewer] Update failed:', err);
+            webview.postMessage({
+                type: 'updateError',
+                message: err instanceof Error ? err.message : String(err),
+                tableName,
+                rowId,
+                column
+            });
+        }
     }
 
     private async saveFile(content: string, defaultFilename: string, fileType: string) {
@@ -226,7 +265,8 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider<Sql
             const sortClause = sortCol ? `ORDER BY ${this.escapeId(sortCol)} ${validSortDir}` : '';
 
             // Get table data with pagination and sorting
-            const dataResult = db.exec(`SELECT * FROM ${this.escapeId(tableName)} ${sortClause} LIMIT ${size} OFFSET ${offset}`);
+            // Use __rowid__ alias to ensure unique property access and avoid collisions
+            const dataResult = db.exec(`SELECT rowid as __rowid__, * FROM ${this.escapeId(tableName)} ${sortClause} LIMIT ${size} OFFSET ${offset}`);
 
             // Get row count
             const countResult = db.exec(`SELECT COUNT(*) as count FROM ${this.escapeId(tableName)}`);
@@ -300,7 +340,7 @@ export class DbViewerProvider implements vscode.CustomReadonlyEditorProvider<Sql
             const totalPages = Math.ceil(rowCount / size);
 
             // Get table data with pagination
-            const dataQuery = `SELECT * FROM ${this.escapeId(tableName)} WHERE ${whereClause} LIMIT ${size} OFFSET ${offset}`;
+            const dataQuery = `SELECT rowid as __rowid__, * FROM ${this.escapeId(tableName)} WHERE ${whereClause} LIMIT ${size} OFFSET ${offset}`;
             const dataResult = db.exec(dataQuery);
 
             console.log(`[DB Viewer] Search found ${rowCount} rows, page ${p}/${totalPages}`);
