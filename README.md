@@ -12,29 +12,36 @@
 
 **DB Viewer Enhanced** is a powerful community-maintained extension that brings a full-featured SQLite database manager directly into Visual Studio Code. 
 
-Whether you are debugging a local application, analyzing data, or just need to quickly peek into a `.db` file, this extension provides a beautiful, native-feeling interface to explore your data without ever leaving your editor.
+It transforms your editor into a comprehensive data studio. Whether you are debugging a local application, analyzing complex datasets, or visualizing statistics, this extension provides a native, high-performance interface to explore and modify your data without ever leaving your editor.
 
-> **Note:** This is an enhanced fork of the original DB Viewer, updated for modern VS Code compatibility, improved performance, and new features.
+> **Note:** This is an enhanced fork of the original DB Viewer, featuring direct data editing, advanced charting capabilities, and polished UI improvements.
 
 ---
 
 ## ✨ Key Features
 
+### ✏️ Data Editing & Management
+*   **Direct Cell Editing**: Double-click any cell to edit its value physically in the database file.
+*   **Schema Inspection**: View detailed table structures including column types, default values, and primary keys.
+*   **Safe Writes**: Changes are written securely to the disk, ensuring data integrity.
+
+### 📈 Advanced Data Visualization
+*   **Instant Charting**: Turn your table data into beautiful visualizations with a single click.
+*   **Multiple Chart Types**: Support for **Bar**, **Line**, **Pie**, **Doughnut**, and **Scatter** charts.
+*   **Smart Aggregation**: Automatically group and sum data (e.g., "Sales by Region") or plot raw values.
+*   **Export Charts**: Save your visualizations as transparent PNG images.
+*   **Theme Integration**: Charts automatically adapt to your VS Code theme (Dark/Light) or can use custom color palettes like "Ocean" or "Warm".
+
 ### 📊 Interactive Data Explorer
-*   **Smart Table Navigation**: Quickly switch between tables using the sidebar with real-time row counts.
-*   **Sorting & Filtering**: Click headers to sort columns and use the search bar to filter data instantly.
-*   **Pagination**: Efficiently handle large datasets with customizable page sizes (50, 100, 200, 500 rows).
-*   **Cell Inspection**: Click any cell to view deep content, ideal for examining large text blobs or JSON data.
+*   **Smart Table Navigation**: Sidebar with real-time row counts for all tables.
+*   **Server-Side Filtering**: Use the search bar to filter thousands of rows instantly.
+*   **Pagination**: Efficiently handle large datasets with customizable page sizes (50 to 1000 rows).
+*   **Cell Inspection**: Single-click to copy, view detailed content for large text/JSON blobs.
 
-### 🛠️ Data Management Tools
-*   **SQL Query Editor**: Run custom SQL queries in a built-in editor with syntax highlighting.
-*   **Export Options**: Export table data or query results to **CSV** or **JSON** for use in other applications.
-*   **Copy Support**: One-click copy for individual cells or entire tables.
-
-### 🎨 Seamless Integration
-*   **Native Look & Feel**: Designed to match your VS Code theme (Dark/Light mode supported).
-*   **Read-Only Safety**: By default, the viewer opens in a safe mode to prevent accidental data modification.
-*   **Responsive Design**: Smooth scrolling and responsive layouts for wide tables.
+### 🛠️ Query & Export Tools
+*   **SQL Query Editor**: Run custom SQL queries with a history-aware editor.
+*   **Export Options**: Export entire tables or query results to **CSV** or **JSON**.
+*   **Clipboard Support**: Shortcuts to copy single cells or the entire visible dataset (`Ctrl+Shift+C`).
 
 ---
 
@@ -59,24 +66,41 @@ DB Viewer automatically detects and handles a wide range of SQLite file extensio
 
 ### Opening a Database
 1.  Locate your database file in the VS Code File Explorer.
-2.  Simply **click** on the file to open it in the DB Viewer.
-3.  Alternatively, right-click the file and select **"Open With..."** -> **"DB Viewer Enhanced"**.
+2.  Click the file to open it in **DB Viewer Enhanced**.
+
+### Editing Data
+1.  **Double-click** any cell in the table view.
+2.  Modify the content in the input field.
+3.  Press **Enter** to save changes to disk, or **Esc** to cancel.
+
+### Visualizing Data (Charting)
+1.  Open a table with numeric data.
+2.  Click the **Chart** button in the top toolbar.
+3.  Select your **X Axis** (category) and **Y Axis** (value).
+4.  Switch between **Raw Mode** (plot rows) or **Aggregate Mode** (sum values by category).
 
 ### Running SQL Queries
-1.  Open the **"Execute SQL"** panel at the top of the viewer.
-2.  Type your SQL query (e.g., `SELECT * FROM users WHERE active = 1`).
-3.  Click **Run Query** to see the results in the table view.
+1.  Expand the **"SQL Query Editor"** panel at the top.
+2.  Type your query (e.g., `SELECT * FROM sales WHERE amount > 100`).
+3.  Click **Execute Query**. Results are displayed in the grid and can also be charted!
 
-### Exporting Data
-1.  Navigate to the table or query result you want to save.
-2.  Click the **Export CSV** or **Export JSON** buttons in the toolbar.
-3.  Choose a location to save your file.
+---
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+| :--- | :--- |
+| `Ctrl + R` / `F5` | Refresh current table data |
+| `Ctrl + F` | Focus the search/filter input |
+| `Ctrl + Shift + C` | Copy all visible data to clipboard |
+| `Enter` (in edit mode) | Save cell value |
+| `Esc` (in edit mode) | Cancel edit |
 
 ---
 
 ## ⌨️ Development & Contributing
 
-We welcome contributions! If you want to run the extension locally or contribute to the code:
+We welcome contributions!
 
 1.  **Clone the repository**
     ```bash
@@ -102,11 +126,4 @@ We welcome contributions! If you want to run the extension locally or contribute
 ## 📜 License
 
 This project is licensed under the [MIT License](LICENSE).
-
----
-
-## 🙏 Acknowledgements
-
-*   Original work by [Mujeeb ur Rehman](https://github.com/thedatascientiist).
-*   Powered by [sql.js](https://github.com/sql-js/sql.js).
 
