@@ -1,3 +1,5 @@
+
+
 # 🗄️ DB Viewer Enhanced
 
 **The Ultimate SQLite Database Explorer for VS Code**
@@ -14,7 +16,7 @@
 
 It transforms your editor into a comprehensive data studio. Whether you are debugging a local application, analyzing complex datasets, or visualizing statistics, this extension provides a native, high-performance interface to explore and modify your data without ever leaving your editor.
 
-> **Note:** This is an enhanced fork of the original DB Viewer, featuring direct data editing, advanced charting capabilities, and polished UI improvements.
+> **Note:** This is an enhanced fork of the original DB Viewer from the original creator [Mujeeb ur Rehman](https://github.com/thedatascientiist), featuring major bug fixes, enhanced features and a more optimized extension for a better overall experience.
 
 ---
 
@@ -97,7 +99,6 @@ DB Viewer automatically detects and handles a wide range of SQLite file extensio
 | `Esc` (in edit mode) | Cancel edit |
 
 ---
-
 ## ⌨️ Development & Contributing
 
 We welcome contributions!
@@ -112,7 +113,7 @@ We welcome contributions!
     ```bash
     npm install
     ```
-
+    
 3.  **Run in Debug Mode**
     *   Press `F5` in VS Code to launch the Extension Development Host.
 
@@ -120,10 +121,6 @@ We welcome contributions!
     ```bash
     npm run compile
     ```
-
 ---
-
 ## 📜 License
-
 This project is licensed under the [MIT License](LICENSE).
-
